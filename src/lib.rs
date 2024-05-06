@@ -5,7 +5,6 @@
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-#![no_std]
 #![feature(adt_const_params)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
@@ -28,6 +27,21 @@ pub struct F8<const E: u32, const M: u32,
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct F16<const E: u32, const M: u32>(u16);
+
+macro_rules! define_round_for_mantissa {
+    ($name:ident, $f:ty) => {
+        fn $name<const M: u32>(x: $f) -> $f {
+            let x = x.to_bits();
+            let shift = <$f>::MANTISSA_DIGITS - 1 - M;
+            let ulp = 1 << shift;
+            let bias = (ulp >> 1) - (!(x >> shift) & 1);
+            <$f>::from_bits((x + bias) & !(ulp - 1))
+        }
+    };
+}
+
+define_round_for_mantissa!(round_f32_for_mantissa, f32);
+define_round_for_mantissa!(round_f64_for_mantissa, f64);
 
 impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
@@ -63,6 +77,30 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
     pub const fn to_bits(self) -> u8 {
         self.0
     }
+
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+    pub fn from_f32(x: f32) -> Self {
+        let repr = round_f32_for_mantissa::<M>(x).to_bits();
+        let sign_bit = ((repr >> 31) as u8) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = Self::MIN_EXP - f32::MIN_EXP;
+        let bias = diff << (f32::MANTISSA_DIGITS - 1);
+        let magnitude = (i32::MAX as u32 & repr) as i32 - bias;
+
+        if magnitude < 1 << (f32::MANTISSA_DIGITS - 1) {
+            let ticks = x.abs() * f32::exp2(Self::MANTISSA_DIGITS as f32) * f32::exp2(-Self::MIN_EXP as f32);
+            let ticks = ticks.round_ties_even() as u8;
+            return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
+        }
+
+        let shift = f32::MANTISSA_DIGITS - Self::MANTISSA_DIGITS;
+        Self(sign_bit | Self::MAX.0.min((magnitude >> shift) as u8))
+    }
 }
 
 impl <const E: u32, const M: u32, const B: i32> F8<E, M, {NanStyle::IEEE}, B> {
@@ -95,21 +133,6 @@ impl <const E: u32, const M: u32> F16<E, M> {
         self.0
     }
 }
-
-macro_rules! define_round_for_mantissa {
-    ($name:ident, $f:ty) => {
-        fn $name<const M: u32>(x: $f) -> $f {
-            let x = x.to_bits();
-            let shift = <$f>::MANTISSA_DIGITS - 1 - M;
-            let ulp = 1 << shift;
-            let bias = (ulp >> 1) - (!(x >> shift) & 1);
-            <$f>::from_bits((x + bias) & !(ulp - 1))
-        }
-    };
-}
-
-define_round_for_mantissa!(round_f32_for_mantissa, f32);
-define_round_for_mantissa!(round_f64_for_mantissa, f64);
 
 enum Assert<const CHECK: bool> {}
 trait IsTrue {}
