@@ -42,7 +42,7 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
     }
 
     #[must_use]
-    pub const fn bits(self) -> u8 {
+    pub const fn to_bits(self) -> u8 {
         self.0
     }
 }
@@ -60,7 +60,22 @@ impl <const E: u32, const M: u32> F16<E, M> {
     }
 
     #[must_use]
-    pub const fn bits(self) -> u16 {
+    pub const fn to_bits(self) -> u16 {
         self.0
     }
 }
+
+macro_rules! define_round_for_mantissa {
+    ($name:ident, $f:ty) => {
+        fn $name<const M: u32>(x: $f) -> $f {
+            let x = x.to_bits();
+            let shift = <$f>::MANTISSA_DIGITS - 1 - M;
+            let ulp = 1 << shift;
+            let bias = (ulp >> 1) - (!(x >> shift) & 1);
+            <$f>::from_bits((x + bias) & !(ulp - 1))
+        }
+    };
+}
+
+define_round_for_mantissa!(round_f32_for_mantissa, f32);
+define_round_for_mantissa!(round_f64_for_mantissa, f64);
