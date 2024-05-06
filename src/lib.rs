@@ -31,10 +31,25 @@ pub struct F16<const E: u32, const M: u32>(u16);
 
 impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
+    const _HAS_EXPONENT: () = assert!(E > 0);
+    const _HAS_SIGNIFICAND: () = assert!(M > 0);
+
     pub const RADIX: u32 = 2;
     pub const MANTISSA_DIGITS: u32 = M + 1;
     pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
     pub const MIN_EXP: i32 = 2 - B;
+
+    pub const INFINITY: Self = Self(match N {
+        NanStyle::IEEE => ((1 << E) - 1) << M,
+        NanStyle::FN   => (1 << (E + M)) - 2,
+        NanStyle::FNUZ => (1 << (E + M)) - 1,
+    });
+
+    pub const NAN: Self = Self(match N {
+        NanStyle::IEEE => ((1 << (E + 1)) - 1) << (M - 1),
+        NanStyle::FN   => (1 << (E + M)) - 1,
+        NanStyle::FNUZ =>  1 << (E + M),
+    });
 
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
@@ -49,10 +64,15 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
 
 impl <const E: u32, const M: u32> F16<E, M> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 16);
+    const _HAS_EXPONENT: () = assert!(E > 0);
+    const _HAS_SIGNIFICAND: () = assert!(M > 0);
+
     pub const RADIX: u32 = 2;
     pub const MANTISSA_DIGITS: u32 = M + 1;
     pub const MAX_EXP: i32 = 1 << (E - 1);
     pub const MIN_EXP: i32 = 3 - Self::MAX_EXP;
+    pub const INFINITY: Self = Self(((1 << E) - 1) << M);
+    pub const NAN: Self = Self(((1 << (E + 1)) - 1) << (M - 1));
 
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
