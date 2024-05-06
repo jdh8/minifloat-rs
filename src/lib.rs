@@ -21,16 +21,20 @@ pub enum NanStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct F8<const E: usize, const M: usize,
+pub struct F8<const E: u32, const M: u32,
     const N: NanStyle = {NanStyle::IEEE},
     const B: i32 = {(1 << (E - 1)) - 1},
 >(u8);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct F16<const E: usize, const M: usize>(u16);
+pub struct F16<const E: u32, const M: u32>(u16);
 
-impl <const E: usize, const M: usize, const N: NanStyle, const B: i32> F8<E, M, N, B> {
+impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
+    pub const RADIX: u32 = 2;
+    pub const MANTISSA_DIGITS: u32 = M + 1;
+    pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
+    pub const MIN_EXP: i32 = 2 - B;
 
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
@@ -43,8 +47,12 @@ impl <const E: usize, const M: usize, const N: NanStyle, const B: i32> F8<E, M, 
     }
 }
 
-impl <const E: usize, const M: usize> F16<E, M> {
+impl <const E: u32, const M: u32> F16<E, M> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 16);
+    pub const RADIX: u32 = 2;
+    pub const MANTISSA_DIGITS: u32 = M + 1;
+    pub const MAX_EXP: i32 = 1 << (E - 1);
+    pub const MIN_EXP: i32 = 3 - Self::MAX_EXP;
 
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
