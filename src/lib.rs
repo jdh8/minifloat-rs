@@ -39,17 +39,20 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
     pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
     pub const MIN_EXP: i32 = 2 - B;
 
-    pub const INFINITY: Self = Self(match N {
-        NanStyle::IEEE => ((1 << E) - 1) << M,
-        NanStyle::FN   => (1 << (E + M)) - 2,
-        NanStyle::FNUZ => (1 << (E + M)) - 1,
-    });
-
     pub const NAN: Self = Self(match N {
         NanStyle::IEEE => ((1 << (E + 1)) - 1) << (M - 1),
         NanStyle::FN   => (1 << (E + M)) - 1,
         NanStyle::FNUZ =>  1 << (E + M),
     });
+
+    pub const MAX: Self = Self(match N {
+        NanStyle::IEEE => (((1 << E) - 1) << M) - 1,
+        NanStyle::FN   => (1 << (E + M)) - 2,
+        NanStyle::FNUZ => (1 << (E + M)) - 1,
+    });
+
+    pub const MIN_POSITIVE: Self = Self(1 << M);
+    pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
@@ -60,6 +63,11 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
     pub const fn to_bits(self) -> u8 {
         self.0
     }
+}
+
+impl <const E: u32, const M: u32, const B: i32> F8<E, M, {NanStyle::IEEE}, B> {
+    pub const INFINITY: Self = Self(((1 << E) - 1) << M);
+    pub const NEG_INFINITY: Self = Self(Self::INFINITY.0 | 1 << (E + M));
 }
 
 impl <const E: u32, const M: u32> F16<E, M> {
@@ -73,6 +81,9 @@ impl <const E: u32, const M: u32> F16<E, M> {
     pub const MIN_EXP: i32 = 3 - Self::MAX_EXP;
     pub const INFINITY: Self = Self(((1 << E) - 1) << M);
     pub const NAN: Self = Self(((1 << (E + 1)) - 1) << (M - 1));
+    pub const MAX: Self = Self((((1 << E) - 1) << M) - 1);
+    pub const MIN_POSITIVE: Self = Self(1 << M);
+    pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
@@ -99,3 +110,18 @@ macro_rules! define_round_for_mantissa {
 
 define_round_for_mantissa!(round_f32_for_mantissa, f32);
 define_round_for_mantissa!(round_f64_for_mantissa, f64);
+
+enum Assert<const CHECK: bool> {}
+trait IsTrue {}
+impl IsTrue for Assert<true> {}
+
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32>
+From<F8<E, M, N, B>> for f32
+where
+    Assert<{F8::<E, M, N, B>::MAX_EXP <= Self::MAX_EXP}>: IsTrue,
+    Assert<{F8::<E, M, N, B>::MIN_EXP >= Self::MIN_EXP}>: IsTrue,
+{
+    fn from(_: F8<E, M, N, B>) -> Self {
+        todo!()
+    }
+}
