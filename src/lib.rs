@@ -119,6 +119,31 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
         Self(sign_bit | Self::MAX.0.min(magnitude as u8))
     }
 
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn from_f64(x: f64) -> Self {
+        let bits = round_f64_for_mantissa::<M>(x).to_bits();
+        let sign_bit = ((bits >> 63) as u8) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i64 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = x.abs() * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let ticks = ticks.round_ties_even() as u8;
+            return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(sign_bit | Self::MAX.0.min(magnitude as u8))
+    }
+
     const ABS_MASK: u8 = (1 << (E + M)) - 1;
 
     #[must_use]
@@ -218,4 +243,11 @@ macro_rules! define_into_f32 {
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32>
 From<F8<E, M, N, B>> for f32 {
     define_into_f32!(from, F8<E, M, N, B>);
+}
+
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32>
+From<F8<E, M, N, B>> for f64 {
+    fn from(x: F8<E, M, N, B>) -> Self {
+        f32::from(x).into()
+    }
 }

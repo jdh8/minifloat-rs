@@ -43,6 +43,6 @@ fn test_finite_bits() {
 
 #[test]
 fn sanity() {
-    let x: f32 = crate::F8::<3, 4>::from_f32(2.0).into();
+    let x: f64 = crate::F8::<3, 4>::from_f32(2.0).into();
     assert_eq!(x, 2.0);
 }
