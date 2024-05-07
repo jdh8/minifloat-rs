@@ -74,6 +74,7 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
         NanStyle::FNUZ => (1 << (E + M)) - 1,
     });
 
+    pub const TINY: Self = Self(1);
     pub const MIN_POSITIVE: Self = Self(1 << M);
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
@@ -111,6 +112,37 @@ impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         Self(sign_bit | Self::MAX.0.min(magnitude as u8))
     }
+
+    const ABS_MASK: u8 = (1 << (E + M)) - 1;
+
+    #[must_use]
+    pub const fn is_nan(self) -> bool {
+        match N {
+            NanStyle::IEEE => self.0 & Self::ABS_MASK > Self::MAX.0 + 1,
+            NanStyle::FN   => self.0 & Self::ABS_MASK == Self::NAN.0,
+            NanStyle::FNUZ => self.0 == Self::NAN.0,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_infinite(self) -> bool {
+        matches!(N, NanStyle::IEEE) && self.0 & Self::ABS_MASK == Self::MAX.0 + 1
+    }
+
+    #[must_use]
+    pub const fn is_finite(self) -> bool {
+        !self.is_nan() && !self.is_infinite()
+    }
+
+    #[must_use]
+    pub const fn is_sign_positive(self) -> bool {
+        self.0 >> (E + M) & 1 == 0
+    }
+
+    #[must_use]
+    pub const fn is_sign_negative(self) -> bool {
+        self.0 >> (E + M) & 1 == 1
+    }
 }
 
 impl <const E: u32, const M: u32, const B: i32> F8<E, M, {NanStyle::IEEE}, B> {
@@ -130,6 +162,7 @@ impl <const E: u32, const M: u32> F16<E, M> {
     pub const INFINITY: Self = Self(((1 << E) - 1) << M);
     pub const NAN: Self = Self(((1 << (E + 1)) - 1) << (M - 1));
     pub const MAX: Self = Self((((1 << E) - 1) << M) - 1);
+    pub const TINY: Self = Self(1);
     pub const MIN_POSITIVE: Self = Self(1 << M);
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
@@ -154,7 +187,29 @@ where
     Assert<{F8::<E, M, N, B>::MAX_EXP <= Self::MAX_EXP}>: IsTrue,
     Assert<{F8::<E, M, N, B>::MIN_EXP >= Self::MIN_EXP}>: IsTrue,
 {
-    fn from(_: F8<E, M, N, B>) -> Self {
-        todo!()
+    fn from(x: F8<E, M, N, B>) -> Self {
+        let digits = F8::<E, M, N, B>::MANTISSA_DIGITS;
+        let min_exp = F8::<E, M, N, B>::MIN_EXP;
+        let sign = if x.is_sign_negative() { 1.0 } else { -1.0 };
+        let magnitude = x.0 & F8::<E, M, N, B>::ABS_MASK;
+
+        if x.is_nan() {
+            return Self::NAN * sign;
+        }
+        if x.is_infinite() {
+            return Self::INFINITY * sign;
+        }
+        if magnitude < 1 << M {
+            #[allow(clippy::cast_possible_wrap)]
+            let shift = min_exp - digits as i32;
+            #[allow(clippy::cast_possible_truncation)]
+            return (fast_exp2(shift) * f64::from(sign) * f64::from(magnitude)) as Self;
+        }
+        let shift = Self::MANTISSA_DIGITS - digits;
+        #[allow(clippy::cast_sign_loss)]
+        let diff = (min_exp - Self::MIN_EXP) as u32;
+        let diff = diff << (Self::MANTISSA_DIGITS - 1);
+        let sign = u32::from(sign.is_sign_negative()) << 31;
+        Self::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
     }
 }
