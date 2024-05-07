@@ -9,6 +9,7 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
 
+mod test;
 use core::marker::ConstParamTy;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -190,7 +191,7 @@ where
     fn from(x: F8<E, M, N, B>) -> Self {
         let digits = F8::<E, M, N, B>::MANTISSA_DIGITS;
         let min_exp = F8::<E, M, N, B>::MIN_EXP;
-        let sign = if x.is_sign_negative() { 1.0 } else { -1.0 };
+        let sign = if x.is_sign_positive() { 1.0 } else { -1.0 };
         let magnitude = x.0 & F8::<E, M, N, B>::ABS_MASK;
 
         if x.is_nan() {
@@ -209,7 +210,7 @@ where
         #[allow(clippy::cast_sign_loss)]
         let diff = (min_exp - Self::MIN_EXP) as u32;
         let diff = diff << (Self::MANTISSA_DIGITS - 1);
-        let sign = u32::from(sign.is_sign_negative()) << 31;
+        let sign = u32::from(x.is_sign_negative()) << 31;
         Self::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
     }
 }
