@@ -57,12 +57,16 @@ define_round_for_mantissa!(round_f64_for_mantissa, f64);
 impl <const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
     const _HAS_EXPONENT: () = assert!(E > 0);
-    const _HAS_SIGNIFICAND: () = assert!(M > 0);
 
     pub const RADIX: u32 = 2;
     pub const MANTISSA_DIGITS: u32 = M + 1;
     pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
     pub const MIN_EXP: i32 = 2 - B;
+
+    const _IS_LOSSLESS_INTO_F32: () = assert!(
+        Self::MAX_EXP <= f32::MAX_EXP &&
+        Self::MIN_EXP >= f32::MIN_EXP
+    );
 
     pub const NAN: Self = Self(match N {
         NanStyle::IEEE => ((1 << (E + 1)) - 1) << (M - 1),
@@ -155,7 +159,6 @@ impl <const E: u32, const M: u32, const B: i32> F8<E, M, {NanStyle::IEEE}, B> {
 impl <const E: u32, const M: u32> F16<E, M> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 16);
     const _HAS_EXPONENT: () = assert!(E > 0);
-    const _HAS_SIGNIFICAND: () = assert!(M > 0);
 
     pub const RADIX: u32 = 2;
     pub const MANTISSA_DIGITS: u32 = M + 1;
@@ -168,6 +171,11 @@ impl <const E: u32, const M: u32> F16<E, M> {
     pub const MIN_POSITIVE: Self = Self(1 << M);
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
+    const _IS_LOSSLESS_INTO_F32: () = assert!(
+        Self::MAX_EXP <= f32::MAX_EXP &&
+        Self::MIN_EXP >= f32::MIN_EXP
+    );
+
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
         Self(v)
@@ -179,39 +187,35 @@ impl <const E: u32, const M: u32> F16<E, M> {
     }
 }
 
-enum Assert<const CHECK: bool> {}
-trait IsTrue {}
-impl IsTrue for Assert<true> {}
+macro_rules! define_into_f32 {
+    ($name:ident, $f:ty) => {
+        fn $name(x: $f) -> f32 {
+            let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
+            let magnitude = x.to_bits() & <$f>::ABS_MASK;
+
+            if x.is_nan() {
+                return f32::NAN * sign;
+            }
+            if x.is_infinite() {
+                return f32::INFINITY * sign;
+            }
+            if magnitude < 1 << M {
+                #[allow(clippy::cast_possible_wrap)]
+                let shift = <$f>::MIN_EXP - <$f>::MANTISSA_DIGITS as i32;
+                #[allow(clippy::cast_possible_truncation)]
+                return (fast_exp2(shift) * f64::from(sign) * f64::from(magnitude)) as f32;
+            }
+            let shift = f32::MANTISSA_DIGITS - <$f>::MANTISSA_DIGITS;
+            #[allow(clippy::cast_sign_loss)]
+            let diff = (<$f>::MIN_EXP - f32::MIN_EXP) as u32;
+            let diff = diff << (f32::MANTISSA_DIGITS - 1);
+            let sign = u32::from(x.is_sign_negative()) << 31;
+            f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
+        }
+    };
+}
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32>
-From<F8<E, M, N, B>> for f32
-where
-    Assert<{F8::<E, M, N, B>::MAX_EXP <= Self::MAX_EXP}>: IsTrue,
-    Assert<{F8::<E, M, N, B>::MIN_EXP >= Self::MIN_EXP}>: IsTrue,
-{
-    fn from(x: F8<E, M, N, B>) -> Self {
-        let digits = F8::<E, M, N, B>::MANTISSA_DIGITS;
-        let min_exp = F8::<E, M, N, B>::MIN_EXP;
-        let sign = if x.is_sign_positive() { 1.0 } else { -1.0 };
-        let magnitude = x.0 & F8::<E, M, N, B>::ABS_MASK;
-
-        if x.is_nan() {
-            return Self::NAN * sign;
-        }
-        if x.is_infinite() {
-            return Self::INFINITY * sign;
-        }
-        if magnitude < 1 << M {
-            #[allow(clippy::cast_possible_wrap)]
-            let shift = min_exp - digits as i32;
-            #[allow(clippy::cast_possible_truncation)]
-            return (fast_exp2(shift) * f64::from(sign) * f64::from(magnitude)) as Self;
-        }
-        let shift = Self::MANTISSA_DIGITS - digits;
-        #[allow(clippy::cast_sign_loss)]
-        let diff = (min_exp - Self::MIN_EXP) as u32;
-        let diff = diff << (Self::MANTISSA_DIGITS - 1);
-        let sign = u32::from(x.is_sign_negative()) << 31;
-        Self::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
-    }
+From<F8<E, M, N, B>> for f32 {
+    define_into_f32!(from, F8<E, M, N, B>);
 }
