@@ -6,6 +6,12 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #![cfg(test)]
+#![allow(clippy::float_cmp)]
+
+#[test]
+fn test_exp2() {
+    (-1200..1200).for_each(|x| assert_eq!(crate::fast_exp2(x), f64::from(x).exp2()));
+}
 
 #[test]
 fn sanity() {

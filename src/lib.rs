@@ -31,9 +31,10 @@ pub struct F16<const E: u32, const M: u32>(u16);
 
 fn fast_exp2(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
+        0x800.. => 0x7FF << 52,
         #[allow(clippy::cast_sign_loss)]
-        s@0.. => (s as u64) << 52,
-        s@ -52..=-1 => 1 << (52 + s),
+        s@1..=0x7FF => (s as u64) << 52,
+        s@ -51..=0 => 1 << (51 + s),
         _ => 0,
     })
 }
