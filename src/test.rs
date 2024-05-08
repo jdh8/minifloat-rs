@@ -10,6 +10,29 @@
 
 use crate::NanStyle::{FN, FNUZ};
 use crate::{F8, Minifloat, Underlying};
+use core::fmt::Debug;
+
+macro_rules! for_each_f8 {
+    ($f:ident) => {
+        $f::<F8<3, 4>>();
+        $f::<F8<3, 4, {FN}>>();
+        $f::<F8<3, 4, {FNUZ}>>();
+
+        $f::<F8<4, 3>>();
+        $f::<F8<4, 3, {FN}>>();
+        $f::<F8<4, 3, {FNUZ}>>();
+
+        $f::<F8<5, 2>>();
+        $f::<F8<5, 2, {FN}>>();
+        $f::<F8<5, 2, {FNUZ}>>();
+    };
+}
+
+macro_rules! are_equivalent {
+    ($x:expr, $y:expr) => {
+        $x.to_bits() == $y.to_bits() || ($x.is_nan() && $y.is_nan())
+    };
+}
 
 #[test]
 fn test_exp2() {
@@ -43,16 +66,29 @@ fn test_finite_bits() {
     //assert_eq!(F16::<5, 7>::from_f32(-1.25).to_bits(), 0b1_01111_0100000);
 }
 
-macro_rules! are_equivalent {
-    ($x:expr, $y:expr) => {
-        $x.to_bits() == $y.to_bits() || ($x.is_nan() && $y.is_nan())
-    };
+fn test_equality_f8<T: Minifloat + Underlying<u8> + Debug>()
+where f32: From<T>, f64: From<T> {
+    assert_eq!(f32::from(T::from_f32(-3.0)), -3.0);
+    assert_eq!(f64::from(T::from_f64(-3.0)), -3.0);
+    assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
+    assert_eq!(T::from_f32(0.0).to_bits() == T::from_f32(-0.0).to_bits(), T::N == FNUZ);
+    assert!(T::from_f32(f32::NAN).is_nan());
+    assert!(f32::from(T::from_f32(f32::NAN)).is_nan());
+    assert!(f64::from(T::from_f64(f64::NAN)).is_nan());
+
+    (0..=0xFF).map(T::from_bits).for_each(|x| {
+        assert_eq!(x.ne(&x), x.is_nan());
+    });
 }
 
-fn test_identity_conversion_f8<T: Minifloat + Underlying<u8> + core::fmt::Debug>()
+#[test]
+fn equality() {
+    for_each_f8!(test_equality_f8);
+}
+
+fn test_identity_conversion_f8<T: Minifloat + Underlying<u8> + Debug>()
 where f32: From<T> {
-    (0..=0xFF).for_each(|i: u8| {
-        let x = T::from_bits(i);
+    (0..=0xFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(f32::from(x));
         assert!(are_equivalent!(x, y), "{x:?} is not {y:?}");
     });
@@ -60,7 +96,5 @@ where f32: From<T> {
 
 #[test]
 fn identity_conversion() {
-    test_identity_conversion_f8::<F8<3, 4>>();
-    test_identity_conversion_f8::<F8<4, 3>>();
-    test_identity_conversion_f8::<F8<5, 2>>();
+    for_each_f8!(test_identity_conversion_f8);
 }

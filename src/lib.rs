@@ -20,13 +20,13 @@ pub enum NanStyle {
     FNUZ,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct F8<const E: u32, const M: u32,
     const N: NanStyle = {NanStyle::IEEE},
     const B: i32 = {(1 << (E - 1)) - 1},
 >(u8);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
 fn fast_exp2(x: i32) -> f64 {
@@ -281,13 +281,23 @@ From<F8<E, M, N, B>> for f64 {
     }
 }
 
-pub trait Minifloat: Copy {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialEq for F8<E, M, N, B> {
+    fn eq(&self, other: &Self) -> bool {
+        let a = self.to_bits();
+        let b = other.to_bits();
+        let eq = a == b && !self.is_nan();
+        eq || !matches!(N, NanStyle::FNUZ) && (a | b) & Self::ABS_MASK == 0
+    }
+}
+
+pub trait Minifloat: Copy + PartialEq {
     const E: u32;
     const M: u32;
     const N: NanStyle = NanStyle::IEEE;
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
     fn from_f32(x: f32) -> Self;
+    fn from_f64(x: f64) -> Self;
     fn is_nan(self) -> bool;
 }
 
@@ -297,11 +307,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     const N: NanStyle = N;
     const B: i32 = B;
 
-    fn from_f32(x: f32) -> Self {
-        Self::from_f32(x)
-    }
-
-    fn is_nan(self) -> bool {
-        self.is_nan()
-    }
+    fn from_f32(x: f32) -> Self { Self::from_f32(x) }
+    fn from_f64(x: f64) -> Self { Self::from_f64(x) }
+    fn is_nan(self) -> bool { self.is_nan() }
 }
