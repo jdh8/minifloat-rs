@@ -216,7 +216,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
     }
 }
 
-pub trait Underlying<T> {
+pub trait Underlying<T>: Copy {
     fn from_bits(v: T) -> Self;
     fn to_bits(self) -> T;
 }
@@ -282,11 +282,21 @@ From<F8<E, M, N, B>> for f64 {
 }
 
 pub trait Minifloat: Copy {
+    const E: u32;
+    const M: u32;
+    const N: NanStyle = NanStyle::IEEE;
+    const B: i32 = (1 << (Self::E - 1)) - 1;
+
     fn from_f32(x: f32) -> Self;
     fn is_nan(self) -> bool;
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B> {
+    const E: u32 = E;
+    const M: u32 = M;
+    const N: NanStyle = N;
+    const B: i32 = B;
+
     fn from_f32(x: f32) -> Self {
         Self::from_f32(x)
     }

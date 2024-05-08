@@ -43,12 +43,18 @@ fn test_finite_bits() {
     //assert_eq!(F16::<5, 7>::from_f32(-1.25).to_bits(), 0b1_01111_0100000);
 }
 
-fn test_identity_conversion_f8<T: Minifloat + Underlying<u8>>()
+macro_rules! are_equivalent {
+    ($x:expr, $y:expr) => {
+        $x.to_bits() == $y.to_bits() || ($x.is_nan() && $y.is_nan())
+    };
+}
+
+fn test_identity_conversion_f8<T: Minifloat + Underlying<u8> + core::fmt::Debug>()
 where f32: From<T> {
     (0..=0xFF).for_each(|i: u8| {
         let x = T::from_bits(i);
         let y = T::from_f32(f32::from(x));
-        assert!(x.to_bits() == y.to_bits() || (x.is_nan() && y.is_nan()));
+        assert!(are_equivalent!(x, y), "{x:?} is not {y:?}");
     });
 }
 
