@@ -111,6 +111,32 @@ fn equality() {
     for_each_type!(test_equality_f8, test_equality_f16);
 }
 
+fn test_comparison_f8<T: Minifloat + Underlying<u8> + Debug>()
+where f32: From<T> {
+    (0..=0xFF).map(T::from_bits).for_each(|x| {
+        (0..=0xFF).map(T::from_bits).for_each(|y| {
+            assert_eq!(x.partial_cmp(&y), f32::from(x).partial_cmp(&f32::from(y)));
+        });
+    });
+}
+
+fn test_comparison_f16<T: Minifloat + Underlying<u16> + Debug>()
+where f32: From<T> {
+    let x_step = 17 << (T::E + T::M) >> 15 | 1;
+    let y_step = 19 << (T::E + T::M) >> 15 | 1;
+
+    (0..=0xFFFF).step_by(x_step).map(T::from_bits).for_each(|x| {
+        (0..=0xFFFF).step_by(y_step).map(T::from_bits).for_each(|y| {
+            assert_eq!(x.partial_cmp(&y), f32::from(x).partial_cmp(&f32::from(y)));
+        });
+    });
+}
+
+#[test]
+fn comparison() {
+    for_each_type!(test_comparison_f8, test_comparison_f16);
+}
+
 fn test_neg_f8<T: Minifloat + Underlying<u8> + Debug>()
 where f32: From<T> {
     (0..=0xFF).map(T::from_bits).for_each(|x| {
