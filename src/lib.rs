@@ -211,7 +211,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Underlying<u8>
     }
 
     fn to_bits(self) -> u8 {
-        self.to_bits()
+        self.0
     }
 }
 
@@ -221,7 +221,7 @@ impl<const E: u32, const M: u32> Underlying<u16> for F16<E, M> {
     }
 
     fn to_bits(self) -> u16 {
-        self.to_bits()
+        self.0
     }
 }
 
@@ -229,7 +229,7 @@ macro_rules! define_into_f32 {
     ($name:ident, $f:ty) => {
         fn $name(x: $f) -> f32 {
             let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
-            let magnitude = x.to_bits() & <$f>::ABS_MASK;
+            let magnitude = x.0 & <$f>::ABS_MASK;
 
             if x.is_nan() {
                 return f32::NAN * sign;
@@ -277,19 +277,15 @@ impl<const E: u32, const M: u32> From<F16<E, M>> for f64 {
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialEq for F8<E, M, N, B> {
     fn eq(&self, other: &Self) -> bool {
-        let a = self.to_bits();
-        let b = other.to_bits();
-        let eq = a == b && !self.is_nan();
-        eq || !matches!(N, NanStyle::FNUZ) && (a | b) & Self::ABS_MASK == 0
+        let eq = self.0 == other.0 && !self.is_nan();
+        eq || !matches!(N, NanStyle::FNUZ) && (self.0 | other.0) & Self::ABS_MASK == 0
     }
 }
 
 impl<const E: u32, const M: u32> PartialEq for F16<E, M> {
     fn eq(&self, other: &Self) -> bool {
-        let a = self.to_bits();
-        let b = other.to_bits();
-        let eq = a == b && !self.is_nan();
-        eq || (a | b) & Self::ABS_MASK == 0
+        let eq = self.0 == other.0 && !self.is_nan();
+        eq || (self.0 | other.0) & Self::ABS_MASK == 0
     }
 }
 
