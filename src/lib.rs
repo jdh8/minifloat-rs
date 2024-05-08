@@ -11,6 +11,7 @@
 
 mod test;
 use core::marker::ConstParamTy;
+use std::ops::Neg;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, ConstParamTy, PartialEq, Eq)]
@@ -292,7 +293,25 @@ impl<const E: u32, const M: u32> PartialEq for F16<E, M> {
     }
 }
 
-pub trait Minifloat: Copy + PartialEq {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Neg for F8<E, M, N, B> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        let flag = matches!(N, NanStyle::FNUZ) && self.0 & Self::ABS_MASK == 0;
+        let switch = u8::from(!flag) << (E + M);
+        Self(self.0 ^ switch)
+    }
+}
+
+impl<const E: u32, const M: u32> Neg for F16<E, M> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self(self.0 ^ 1 << (E + M))
+    }
+}
+
+pub trait Minifloat: Copy + PartialEq + Neg<Output = Self> {
     const E: u32;
     const M: u32;
     const N: NanStyle = NanStyle::IEEE;

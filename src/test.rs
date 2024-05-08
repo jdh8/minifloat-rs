@@ -12,19 +12,23 @@ use crate::NanStyle::{FN, FNUZ};
 use crate::{Minifloat, Underlying, F16, F8};
 use core::fmt::Debug;
 
-macro_rules! for_each_f8 {
-    ($f:ident) => {
-        $f::<F8<3, 4>>();
-        $f::<F8<3, 4, {FN}>>();
-        $f::<F8<3, 4, {FNUZ}>>();
+macro_rules! for_each_type {
+    ($f8:ident, $f16:ident) => {
+        $f8::<F8<3, 4>>();
+        $f8::<F8<3, 4, {FN}>>();
+        $f8::<F8<3, 4, {FNUZ}>>();
 
-        $f::<F8<4, 3>>();
-        $f::<F8<4, 3, {FN}>>();
-        $f::<F8<4, 3, {FNUZ}>>();
+        $f8::<F8<4, 3>>();
+        $f8::<F8<4, 3, {FN}>>();
+        $f8::<F8<4, 3, {FNUZ}>>();
 
-        $f::<F8<5, 2>>();
-        $f::<F8<5, 2, {FN}>>();
-        $f::<F8<5, 2, {FNUZ}>>();
+        $f8::<F8<5, 2>>();
+        $f8::<F8<5, 2, {FN}>>();
+        $f8::<F8<5, 2, {FNUZ}>>();
+
+        $f16::<F16<5, 7>>();
+        $f16::<crate::f16>();
+        $f16::<crate::bf16>();
     };
 }
 
@@ -104,10 +108,28 @@ where f32: From<T>, f64: From<T> {
 
 #[test]
 fn equality() {
-    for_each_f8!(test_equality_f8);
-    test_equality_f16::<F16<5, 7>>();
-    test_equality_f16::<crate::f16>();
-    test_equality_f16::<crate::bf16>();
+    for_each_type!(test_equality_f8, test_equality_f16);
+}
+
+fn test_neg_f8<T: Minifloat + Underlying<u8> + Debug>()
+where f32: From<T> {
+    (0..=0xFF).map(T::from_bits).for_each(|x| {
+        let y = T::from_f32(-f32::from(x));
+        assert!(are_equivalent!(y, -x), "{y:?} is not {:?}", -x);
+    });
+}
+
+fn test_neg_f16<T: Minifloat + Underlying<u16> + Debug>()
+where f32: From<T> {
+    (0..=0xFFFF).map(T::from_bits).for_each(|x| {
+        let y = T::from_f32(-f32::from(x));
+        assert!(are_equivalent!(y, -x), "{y:?} is not {:?}", -x);
+    });
+}
+
+#[test]
+fn neg() {
+    for_each_type!(test_neg_f8, test_neg_f16);
 }
 
 fn test_identity_conversion_f8<T: Minifloat + Underlying<u8> + Debug>()
@@ -128,8 +150,5 @@ where f32: From<T> {
 
 #[test]
 fn identity_conversion() {
-    for_each_f8!(test_identity_conversion_f8);
-    test_identity_conversion_f16::<F16<5, 7>>();
-    test_identity_conversion_f16::<crate::f16>();
-    test_identity_conversion_f16::<crate::bf16>();
+    for_each_type!(test_identity_conversion_f8, test_identity_conversion_f16);
 }
