@@ -87,7 +87,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
-        Self(v)
+        let mask = if E + M >= 7 { 0xFF } else { (1 << (E + M + 1)) - 1 };
+        Self(v & mask)
     }
 
     #[must_use]
@@ -205,7 +206,8 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
-        Self(v)
+        let mask = if E + M >= 15 { 0xFFFF } else { (1 << (E + M + 1)) - 1 };
+        Self(v & mask)
     }
 
     #[must_use]
