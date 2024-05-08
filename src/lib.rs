@@ -29,6 +29,12 @@ pub struct F8<const E: u32, const M: u32,
 #[derive(Debug, Clone, Copy)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
+#[allow(non_camel_case_types)]
+pub type f16 = F16<5, 10>;
+
+#[allow(non_camel_case_types)]
+pub type bf16 = F16<8, 7>;
+
 fn fast_exp2(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
@@ -258,12 +264,31 @@ From<F8<E, M, N, B>> for f64 {
     }
 }
 
+impl<const E: u32, const M: u32> From<F16<E, M>> for f32 {
+    define_into_f32!(from, F16<E, M>);
+}
+
+impl<const E: u32, const M: u32> From<F16<E, M>> for f64 {
+    fn from(x: F16<E, M>) -> Self {
+        f32::from(x).into()
+    }
+}
+
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialEq for F8<E, M, N, B> {
     fn eq(&self, other: &Self) -> bool {
         let a = self.to_bits();
         let b = other.to_bits();
         let eq = a == b && !self.is_nan();
         eq || !matches!(N, NanStyle::FNUZ) && (a | b) & Self::ABS_MASK == 0
+    }
+}
+
+impl<const E: u32, const M: u32> PartialEq for F16<E, M> {
+    fn eq(&self, other: &Self) -> bool {
+        let a = self.to_bits();
+        let b = other.to_bits();
+        let eq = a == b && !self.is_nan();
+        eq || (a | b) & Self::ABS_MASK == 0
     }
 }
 
@@ -310,7 +335,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
         }
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self(sign_bit | (magnitude.min(i32::from(Self::HUGE.0)) as u8))
+        Self(magnitude.min(i32::from(Self::HUGE.0)) as u8 | sign_bit)
     }
     
     #[must_use]
@@ -335,7 +360,65 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
         }
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self(sign_bit | (magnitude.min(i64::from(Self::HUGE.0)) as u8))
+        Self(magnitude.min(i64::from(Self::HUGE.0)) as u8 | sign_bit)
+    }
+
+    fn is_nan(self) -> bool { self.is_nan() }
+    fn is_infinite(self) -> bool { self.is_infinite() }
+    fn is_sign_positive(self) -> bool { self.is_sign_positive() }
+    fn is_sign_negative(self) -> bool { self.is_sign_negative() }
+}
+
+impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
+    const E: u32 = E;
+    const M: u32 = M;
+
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    fn from_f32(x: f32) -> Self {
+        let bits = round_f32_for_mantissa::<M>(x).to_bits();
+        let sign_bit = ((bits >> 31) as u16) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i32 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return Self(ticks.round_ties_even() as u16 | sign_bit);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(magnitude.min(i32::from(Self::HUGE.0)) as u16 | sign_bit)
+    }
+
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    fn from_f64(x: f64) -> Self {
+        let bits = round_f64_for_mantissa::<M>(x).to_bits();
+        let sign_bit = ((bits >> 63) as u16) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i64 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = x.abs() * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return Self(ticks.round_ties_even() as u16 | sign_bit);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(magnitude.min(i64::from(Self::HUGE.0)) as u16 | sign_bit)
     }
 
     fn is_nan(self) -> bool { self.is_nan() }
