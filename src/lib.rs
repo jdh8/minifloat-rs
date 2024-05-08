@@ -85,6 +85,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const MIN_POSITIVE: Self = Self(1 << M);
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
+    const ABS_MASK: u8 = (1 << (E + M)) - 1;
+
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
         let mask = if E + M >= 7 { 0xFF } else { (1 << (E + M + 1)) - 1 };
@@ -95,58 +97,6 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const fn to_bits(self) -> u8 {
         self.0
     }
-
-    #[must_use]
-    #[allow(clippy::cast_possible_wrap)]
-    pub fn from_f32(x: f32) -> Self {
-        let bits = round_f32_for_mantissa::<M>(x).to_bits();
-        let sign_bit = ((bits >> 31) as u8) << (E + M);
-
-        if x.is_nan() {
-            return Self(Self::NAN.0 | sign_bit);
-        }
-
-        let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
-        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
-        let magnitude = magnitude as i32 - diff;
-
-        if magnitude < 1 << M {
-            let ticks = f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let ticks = ticks.round_ties_even() as u8;
-            return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
-        }
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self(sign_bit | (magnitude.min(i32::from(Self::HUGE.0)) as u8))
-    }
-
-    #[must_use]
-    #[allow(clippy::cast_possible_wrap)]
-    pub fn from_f64(x: f64) -> Self {
-        let bits = round_f64_for_mantissa::<M>(x).to_bits();
-        let sign_bit = ((bits >> 63) as u8) << (E + M);
-
-        if x.is_nan() {
-            return Self(Self::NAN.0 | sign_bit);
-        }
-
-        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
-        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
-        let magnitude = magnitude as i64 - diff;
-
-        if magnitude < 1 << M {
-            let ticks = x.abs() * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let ticks = ticks.round_ties_even() as u8;
-            return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
-        }
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self(sign_bit | (magnitude.min(i64::from(Self::HUGE.0)) as u8))
-    }
-
-    const ABS_MASK: u8 = (1 << (E + M)) - 1;
 
     #[must_use]
     pub const fn is_nan(self) -> bool {
@@ -204,6 +154,8 @@ impl<const E: u32, const M: u32> F16<E, M> {
         Self::MIN_EXP >= f32::MIN_EXP
     );
 
+    const ABS_MASK: u16 = (1 << (E + M)) - 1;
+
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
         let mask = if E + M >= 15 { 0xFFFF } else { (1 << (E + M + 1)) - 1 };
@@ -213,6 +165,31 @@ impl<const E: u32, const M: u32> F16<E, M> {
     #[must_use]
     pub const fn to_bits(self) -> u16 {
         self.0
+    }
+
+    #[must_use]
+    pub const fn is_nan(self) -> bool {
+        self.0 & Self::ABS_MASK > Self::INFINITY.0
+    }
+
+    #[must_use]
+    pub const fn is_infinite(self) -> bool {
+        self.0 & Self::ABS_MASK == Self::INFINITY.0
+    }
+
+    #[must_use]
+    pub const fn is_finite(self) -> bool {
+        !self.is_nan() && !self.is_infinite()
+    }
+
+    #[must_use]
+    pub const fn is_sign_positive(self) -> bool {
+        self.0 >> (E + M) & 1 == 0
+    }
+
+    #[must_use]
+    pub const fn is_sign_negative(self) -> bool {
+        self.0 >> (E + M) & 1 == 1
     }
 }
 
@@ -299,6 +276,10 @@ pub trait Minifloat: Copy + PartialEq {
     fn from_f32(x: f32) -> Self;
     fn from_f64(x: f64) -> Self;
     fn is_nan(self) -> bool;
+    fn is_infinite(self) -> bool;
+    fn is_finite(self) -> bool { !self.is_nan() && !self.is_infinite() }
+    fn is_sign_positive(self) -> bool { !self.is_sign_negative() }
+    fn is_sign_negative(self) -> bool;
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B> {
@@ -307,7 +288,58 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     const N: NanStyle = N;
     const B: i32 = B;
 
-    fn from_f32(x: f32) -> Self { Self::from_f32(x) }
-    fn from_f64(x: f64) -> Self { Self::from_f64(x) }
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    fn from_f32(x: f32) -> Self {
+        let bits = round_f32_for_mantissa::<M>(x).to_bits();
+        let sign_bit = ((bits >> 31) as u8) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i32 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let ticks = ticks.round_ties_even() as u8;
+            return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(sign_bit | (magnitude.min(i32::from(Self::HUGE.0)) as u8))
+    }
+    
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    fn from_f64(x: f64) -> Self {
+        let bits = round_f64_for_mantissa::<M>(x).to_bits();
+        let sign_bit = ((bits >> 63) as u8) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i64 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = x.abs() * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let ticks = ticks.round_ties_even() as u8;
+            return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(sign_bit | (magnitude.min(i64::from(Self::HUGE.0)) as u8))
+    }
+
     fn is_nan(self) -> bool { self.is_nan() }
+    fn is_infinite(self) -> bool { self.is_infinite() }
+    fn is_sign_positive(self) -> bool { self.is_sign_positive() }
+    fn is_sign_negative(self) -> bool { self.is_sign_negative() }
 }
