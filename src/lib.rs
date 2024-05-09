@@ -122,7 +122,10 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     #[must_use]
     pub const fn is_finite(self) -> bool {
-        !self.is_nan() && !self.is_infinite()
+        match N {
+            NanStyle::IEEE => self.0 & Self::ABS_MASK < Self::HUGE.0,
+            _ => !self.is_nan(),
+        }
     }
 
     #[must_use]
@@ -187,7 +190,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     #[must_use]
     pub const fn is_finite(self) -> bool {
-        !self.is_nan() && !self.is_infinite()
+        self.0 & Self::ABS_MASK < Self::INFINITY.0
     }
 
     #[must_use]
@@ -407,6 +410,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
 
     fn is_nan(self) -> bool { self.is_nan() }
     fn is_infinite(self) -> bool { self.is_infinite() }
+    fn is_finite(self) -> bool { self.is_finite() }
     fn is_sign_positive(self) -> bool { self.is_sign_positive() }
     fn is_sign_negative(self) -> bool { self.is_sign_negative() }
 }
@@ -465,6 +469,7 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
 
     fn is_nan(self) -> bool { self.is_nan() }
     fn is_infinite(self) -> bool { self.is_infinite() }
+    fn is_finite(self) -> bool { self.is_finite() }
     fn is_sign_positive(self) -> bool { self.is_sign_positive() }
     fn is_sign_negative(self) -> bool { self.is_sign_negative() }
 }
