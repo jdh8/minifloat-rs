@@ -401,16 +401,26 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     const N: NanStyle = NanStyle::IEEE;
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
-    fn from_f32(x: f32) -> Self;
-    fn from_f64(x: f64) -> Self;
-    fn is_nan(self) -> bool;
-    fn is_infinite(self) -> bool;
-    fn is_finite(self) -> bool { !self.is_nan() && !self.is_infinite() }
-    fn is_subnormal(self) -> bool { matches!(self.classify(), FpCategory::Subnormal) }
-    fn is_normal(self) -> bool { matches!(self.classify(), FpCategory::Normal) }
-    fn classify(self) -> FpCategory;
-    fn is_sign_positive(self) -> bool { !self.is_sign_negative() }
-    fn is_sign_negative(self) -> bool;
+    #[must_use] fn from_f32(x: f32) -> Self;
+    #[must_use] fn from_f64(x: f64) -> Self;
+    #[must_use] fn is_nan(self) -> bool;
+    #[must_use] fn is_infinite(self) -> bool;
+    #[must_use] fn is_finite(self) -> bool { !self.is_nan() && !self.is_infinite() }
+    #[must_use] fn is_subnormal(self) -> bool { matches!(self.classify(), FpCategory::Subnormal) }
+    #[must_use] fn is_normal(self) -> bool { matches!(self.classify(), FpCategory::Normal) }
+    #[must_use] fn classify(self) -> FpCategory;
+    #[must_use] fn is_sign_positive(self) -> bool { !self.is_sign_negative() }
+    #[must_use] fn is_sign_negative(self) -> bool;
+
+    #[must_use]
+    fn max(self, other: Self) -> Self {
+        if self >= other || other.is_nan() { self } else { other }
+    }
+
+    #[must_use]
+    fn min(self, other: Self) -> Self {
+        if self <= other || other.is_nan() { self } else { other }
+    }
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B> {
@@ -419,7 +429,6 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     const N: NanStyle = N;
     const B: i32 = B;
 
-    #[must_use]
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
         let bits = round_f32_for_mantissa::<M>(x).to_bits();
@@ -444,7 +453,6 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
         Self(magnitude.min(i32::from(Self::HUGE.0)) as u8 | sign_bit)
     }
     
-    #[must_use]
     #[allow(clippy::cast_possible_wrap)]
     fn from_f64(x: f64) -> Self {
         let bits = round_f64_for_mantissa::<M>(x).to_bits();
@@ -481,7 +489,6 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
     const E: u32 = E;
     const M: u32 = M;
 
-    #[must_use]
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
         let bits = round_f32_for_mantissa::<M>(x).to_bits();
@@ -505,7 +512,6 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
         Self(magnitude.min(i32::from(Self::HUGE.0)) as u16 | sign_bit)
     }
 
-    #[must_use]
     #[allow(clippy::cast_possible_wrap)]
     fn from_f64(x: f64) -> Self {
         let bits = round_f64_for_mantissa::<M>(x).to_bits();
