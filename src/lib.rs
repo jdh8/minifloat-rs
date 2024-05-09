@@ -12,6 +12,7 @@
 mod test;
 use core::cmp::Ordering;
 use core::marker::ConstParamTy;
+use core::num::FpCategory;
 use std::ops::Neg;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -129,6 +130,36 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     }
 
     #[must_use]
+    pub const fn is_subnormal(self) -> bool {
+        matches!(self.classify(), FpCategory::Subnormal)
+    }
+
+    #[must_use]
+    pub const fn is_normal(self) -> bool {
+        matches!(self.classify(), FpCategory::Normal)
+    }
+
+    #[must_use]
+    pub const fn classify(self) -> FpCategory {
+        if self.is_nan() {
+            FpCategory::Nan
+        }
+        else if self.is_infinite() {
+            FpCategory::Infinite
+        }
+        else {
+            let exp_mask = ((1 << E) - 1) << M;
+            let man_mask = (1 << M) - 1;
+
+            match (self.0 & exp_mask, self.0 & man_mask) {
+                (0, 0) => FpCategory::Zero,
+                (0, _) => FpCategory::Subnormal,
+                (_, _) => FpCategory::Normal,
+            }
+        }
+    }
+
+    #[must_use]
     pub const fn is_sign_positive(self) -> bool {
         self.0 >> (E + M) & 1 == 0
     }
@@ -191,6 +222,33 @@ impl<const E: u32, const M: u32> F16<E, M> {
     #[must_use]
     pub const fn is_finite(self) -> bool {
         self.0 & Self::ABS_MASK < Self::INFINITY.0
+    }
+
+    #[must_use]
+    pub const fn is_subnormal(self) -> bool {
+        matches!(self.classify(), FpCategory::Subnormal)
+    }
+
+    #[must_use]
+    pub const fn is_normal(self) -> bool {
+        matches!(self.classify(), FpCategory::Normal)
+    }
+
+    #[must_use]
+    pub const fn classify(self) -> FpCategory {
+        let exp_mask = ((1 << E) - 1) << M;
+        let man_mask = (1 << M) - 1;
+
+        if self.0 & exp_mask == exp_mask {
+            if self.0 & man_mask == 0 { FpCategory::Infinite } else { FpCategory::Nan }
+        }
+        else {
+            match (self.0 & exp_mask, self.0 & man_mask) {
+                (0, 0) => FpCategory::Zero,
+                (0, _) => FpCategory::Subnormal,
+                (_, _) => FpCategory::Normal,
+            }
+        }
     }
 
     #[must_use]
@@ -348,6 +406,9 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     fn is_nan(self) -> bool;
     fn is_infinite(self) -> bool;
     fn is_finite(self) -> bool { !self.is_nan() && !self.is_infinite() }
+    fn is_subnormal(self) -> bool { matches!(self.classify(), FpCategory::Subnormal) }
+    fn is_normal(self) -> bool { matches!(self.classify(), FpCategory::Normal) }
+    fn classify(self) -> FpCategory;
     fn is_sign_positive(self) -> bool { !self.is_sign_negative() }
     fn is_sign_negative(self) -> bool;
 }
@@ -411,6 +472,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     fn is_nan(self) -> bool { self.is_nan() }
     fn is_infinite(self) -> bool { self.is_infinite() }
     fn is_finite(self) -> bool { self.is_finite() }
+    fn classify(self) -> FpCategory { self.classify() }
     fn is_sign_positive(self) -> bool { self.is_sign_positive() }
     fn is_sign_negative(self) -> bool { self.is_sign_negative() }
 }
@@ -470,6 +532,7 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
     fn is_nan(self) -> bool { self.is_nan() }
     fn is_infinite(self) -> bool { self.is_infinite() }
     fn is_finite(self) -> bool { self.is_finite() }
+    fn classify(self) -> FpCategory { self.classify() }
     fn is_sign_positive(self) -> bool { self.is_sign_positive() }
     fn is_sign_negative(self) -> bool { self.is_sign_negative() }
 }
