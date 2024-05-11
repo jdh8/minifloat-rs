@@ -58,9 +58,9 @@ pub enum NanStyle {
     /// `FNUZ` suffix as in LLVM/MLIR
     ///
     /// `F` is for finite, `N` for a special NaN encoding, `UZ` for unsigned
-    /// zero.  There are no infinities.  The negative zero (&minus;0)
+    /// zero.  There are no infinities.  The negative zero (&minus;0.0)
     /// representation is reserved for NaN.  As a result, there is only one
-    /// (+0) unsigned zero.
+    /// (+0.0) unsigned zero.
     FNUZ,
 }
 
@@ -275,6 +275,15 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const fn is_sign_negative(self) -> bool {
         self.0 >> (E + M) & 1 == 1
     }
+
+    /// Map sign-magnitude notations to plain unsigned integers
+    ///
+    /// This serves as a hook for the [`Minifloat`] trait.
+    const fn total_cmp_key(x: u8) -> u8 {
+        let sign = 1 << (E + M);
+        let mask = ((x & sign) >> (E + M)) * (sign - 1);
+        x ^ (sign | mask)
+    }
 }
 
 impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
@@ -430,6 +439,15 @@ impl<const E: u32, const M: u32> F16<E, M> {
     #[must_use]
     pub const fn is_sign_negative(self) -> bool {
         self.0 >> (E + M) & 1 == 1
+    }
+
+    /// Map sign-magnitude notations to plain unsigned integers
+    ///
+    /// This serves as a hook for the [`Minifloat`] trait.
+    const fn total_cmp_key(x: u16) -> u16 {
+        let sign = 1 << (E + M);
+        let mask = ((x & sign) >> (E + M)) * (sign - 1);
+        x ^ (sign | mask)
     }
 }
 
@@ -610,6 +628,9 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
+    /// One representation of NaN
+    const NAN: Self;
+
     /// The largest number of this type
     ///
     /// This value would be +∞ if the type has infinities.  Otherwise, it is
@@ -697,6 +718,42 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
             other
         }
     }
+
+    /// IEEE 754 total-ordering predicate
+    ///
+    /// The normative definition is lengthy, but it is essentially comparing
+    /// sign-magnitude notations.
+    ///
+    /// See also [`f32::total_cmp`],
+    /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
+    #[must_use]
+    fn total_cmp(&self, other: &Self) -> Ordering;
+
+    /// Get the maximum of two numbers, propagating NaN
+    ///
+    /// For this operation, -0.0 is considered to be less than +0.0 as
+    /// specified in IEEE 754-2019.
+    #[must_use]
+    fn maximum(self, other: Self) -> Self {
+        if self.is_nan() || other.is_nan() {
+            Self::NAN
+        } else {
+            core::cmp::max_by(self, other, Self::total_cmp)
+        }
+    }
+
+    /// Get the minimum of two numbers, propagating NaN
+    ///
+    /// For this operation, -0.0 is considered to be less than +0.0 as
+    /// specified in IEEE 754-2019.
+    #[must_use]
+    fn minimum(self, other: Self) -> Self {
+        if self.is_nan() || other.is_nan() {
+            Self::NAN
+        } else {
+            core::cmp::min_by(self, other, Self::total_cmp)
+        }
+    }
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B> {
@@ -705,6 +762,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     const N: NanStyle = N;
     const B: i32 = B;
 
+    const NAN: Self = Self::NAN;
     const HUGE: Self = Self::HUGE;
 
     #[allow(clippy::cast_possible_wrap)]
@@ -779,12 +837,17 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     fn is_sign_negative(self) -> bool {
         self.is_sign_negative()
     }
+
+    fn total_cmp(&self, other: &Self) -> Ordering {
+        Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
+    }
 }
 
 impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
     const E: u32 = E;
     const M: u32 = M;
 
+    const NAN: Self = Self::NAN;
     const HUGE: Self = Self::HUGE;
 
     #[allow(clippy::cast_possible_wrap)]
@@ -856,5 +919,9 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
 
     fn is_sign_negative(self) -> bool {
         self.is_sign_negative()
+    }
+
+    fn total_cmp(&self, other: &Self) -> Ordering {
+        Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
     }
 }
