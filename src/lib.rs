@@ -150,6 +150,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     const ABS_MASK: u8 = (1 << (E + M)) - 1;
 
+    /// Raw transmutation from `u8`
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
         let mask = if E + M >= 7 {
@@ -160,11 +161,13 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
         Self(v & mask)
     }
 
+    /// Raw transmutation to `u8`
     #[must_use]
     pub const fn to_bits(self) -> u8 {
         self.0
     }
 
+    /// Check if the value is NaN
     #[must_use]
     pub const fn is_nan(self) -> bool {
         match N {
@@ -174,11 +177,13 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
         }
     }
 
+    /// Check if the value is positive or negative infinity
     #[must_use]
     pub const fn is_infinite(self) -> bool {
         matches!(N, NanStyle::IEEE) && self.0 & Self::ABS_MASK == Self::HUGE.0
     }
 
+    /// Check if the value is finite, i.e. neither infinite nor NaN
     #[must_use]
     pub const fn is_finite(self) -> bool {
         match N {
@@ -187,16 +192,26 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
         }
     }
 
+    /// Check if the value is [subnormal]
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
     pub const fn is_subnormal(self) -> bool {
         matches!(self.classify(), FpCategory::Subnormal)
     }
 
+    /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
     pub const fn is_normal(self) -> bool {
         matches!(self.classify(), FpCategory::Normal)
     }
 
+    /// Classify the value into a floating-point category
+    ///
+    /// If only one property is going to be tested, it is generally faster to
+    /// use the specific predicate instead.
     #[must_use]
     pub const fn classify(self) -> FpCategory {
         if self.is_nan() {
@@ -215,11 +230,13 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
         }
     }
 
+    /// Check if the sign bit is clear
     #[must_use]
     pub const fn is_sign_positive(self) -> bool {
         self.0 >> (E + M) & 1 == 0
     }
 
+    /// Check if the sign bit is set
     #[must_use]
     pub const fn is_sign_negative(self) -> bool {
         self.0 >> (E + M) & 1 == 1
@@ -252,6 +269,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     const ABS_MASK: u16 = (1 << (E + M)) - 1;
 
+    /// Raw transmutation from `u16`
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
         let mask = if E + M >= 15 {
@@ -262,36 +280,50 @@ impl<const E: u32, const M: u32> F16<E, M> {
         Self(v & mask)
     }
 
+    /// Raw transmutation to `u16`
     #[must_use]
     pub const fn to_bits(self) -> u16 {
         self.0
     }
 
+    /// Check if the value is NaN
     #[must_use]
     pub const fn is_nan(self) -> bool {
         self.0 & Self::ABS_MASK > Self::INFINITY.0
     }
 
+    /// Check if the value is positive or negative infinity
     #[must_use]
     pub const fn is_infinite(self) -> bool {
         self.0 & Self::ABS_MASK == Self::INFINITY.0
     }
 
+    /// Check if the value is finite, i.e. neither infinite nor NaN
     #[must_use]
     pub const fn is_finite(self) -> bool {
         self.0 & Self::ABS_MASK < Self::INFINITY.0
     }
 
+    /// Check if the value is [subnormal]
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
     pub const fn is_subnormal(self) -> bool {
         matches!(self.classify(), FpCategory::Subnormal)
     }
 
+    /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
     pub const fn is_normal(self) -> bool {
         matches!(self.classify(), FpCategory::Normal)
     }
 
+    /// Classify the value into a floating-point category
+    ///
+    /// If only one property is going to be tested, it is generally faster to
+    /// use the specific predicate instead.
     #[must_use]
     pub const fn classify(self) -> FpCategory {
         let exp_mask = ((1 << E) - 1) << M;
@@ -312,11 +344,13 @@ impl<const E: u32, const M: u32> F16<E, M> {
         }
     }
 
+    /// Check if the sign bit is clear
     #[must_use]
     pub const fn is_sign_positive(self) -> bool {
         self.0 >> (E + M) & 1 == 0
     }
 
+    /// Check if the sign bit is set
     #[must_use]
     pub const fn is_sign_negative(self) -> bool {
         self.0 >> (E + M) & 1 == 1
