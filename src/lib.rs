@@ -15,7 +15,7 @@
 //! - Exponent width
 //! - Significand (mantissa) precision
 //! - ([`F8`]-only) Exponent bias
-//! - ([`F8`]-only) NaN encodings: IEEE, FN, or FNUZ
+//! - ([`F8`]-only) NaN encodings: [IEEE][NanStyle::IEEE], [FN][NanStyle::FN], or [FNUZ][NanStyle::FNUZ]
 //!
 //! Note that there is always a sign bit, so [`F8<4, 3>`] already uses up all
 //! 8 bits: 1 sign bit, 4 exponent bits, and 3 significand bits.
@@ -85,11 +85,11 @@ pub struct F8<
 #[derive(Debug, Clone, Copy)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
-/// [F16<5, 10>], IEEE binary16, half precision
+/// [`F16<5, 10>`], IEEE binary16, half precision
 #[allow(non_camel_case_types)]
 pub type f16 = F16<5, 10>;
 
-/// [F16<8, 7>], bfloat16 format
+/// [`F16<8, 7>`], bfloat16 format
 #[allow(non_camel_case_types)]
 pub type bf16 = F16<8, 7>;
 
