@@ -15,11 +15,32 @@ use core::marker::ConstParamTy;
 use core::num::FpCategory;
 use std::ops::Neg;
 
+/// NaN encoding style
+///
+/// The variants follow LLVM/MLIR naming conventions derived from their
+/// differences to IEEE 754.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, ConstParamTy, PartialEq, Eq)]
 pub enum NanStyle {
+    /// IEEE 754 NaN encoding
+    ///
+    /// The maximum exponent is reserved for non-finite numbers.  The zero
+    /// mantissa stands for infinity, while any other value represents a NaN.
     IEEE,
+
+    /// `FN` suffix as in LLVM/MLIR
+    ///
+    /// `F` is for finite, `N` for a special NaN encoding.  There are no
+    /// infinities.  The maximum magnitude is reserved for NaNs, where the
+    /// exponent and mantissa are all ones.
     FN,
+
+    /// `FNUZ` suffix as in LLVM/MLIR
+    ///
+    /// `F` is for finite, `N` for a special NaN encoding, `UZ` for unsigned
+    /// zero.  There are no infinities.  The negative zero (&minus;0)
+    /// representation is reserved for NaN.  As a result, there is only one
+    /// (+0) unsigned zero.
     FNUZ,
 }
 
@@ -452,7 +473,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         Self(magnitude.min(i32::from(Self::HUGE.0)) as u8 | sign_bit)
     }
-    
+
     #[allow(clippy::cast_possible_wrap)]
     fn from_f64(x: f64) -> Self {
         let bits = round_f64_for_mantissa::<M>(x).to_bits();
