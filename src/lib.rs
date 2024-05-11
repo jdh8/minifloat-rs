@@ -23,6 +23,7 @@
 #![feature(adt_const_params)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![warn(missing_docs)]
 
 mod test;
 use core::cmp::Ordering;
@@ -92,7 +93,7 @@ pub type f16 = F16<5, 10>;
 #[allow(non_camel_case_types)]
 pub type bf16 = F16<8, 7>;
 
-// Fast 2<sup>`x`</sup> with bit manipulation
+/// Fast 2<sup>`x`</sup> with bit manipulation
 fn fast_exp2(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
@@ -103,9 +104,9 @@ fn fast_exp2(x: i32) -> f64 {
     })
 }
 
-// Round `x` to the nearest representable value with `M` bits of precision
 macro_rules! define_round_to_precision {
     ($name:ident, $f:ty) => {
+        /// Round `x` to the nearest representable value with `M` bits of precision
         fn $name<const M: u32>(x: $f) -> $f {
             let x = x.to_bits();
             let shift = <$f>::MANTISSA_DIGITS - 1 - M;
@@ -123,29 +124,62 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
     const _HAS_EXPONENT: () = assert!(E > 0);
 
+    /// The radix of the internal representation
     pub const RADIX: u32 = 2;
+
+    /// The number of digits in the significand, including the implicit leading bit
     pub const MANTISSA_DIGITS: u32 = M + 1;
+
+    /// The maximum exponent
+    ///
+    /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
     pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
+
+    /// One greater than the minimum normal exponent
+    ///
+    /// Normal numbers ≥ 0.5 &times; 2<sup>`MIN_EXP`</sup>.
+    ///
+    /// This quirk comes from C macros `FLT_MIN_EXP` and friends.  However, it
+    /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
+    /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
+    /// interpreted as normal or subnormal.
     pub const MIN_EXP: i32 = 2 - B;
 
     const _IS_LOSSLESS_INTO_F32: () =
         assert!(Self::MAX_EXP <= f32::MAX_EXP && Self::MIN_EXP >= f32::MIN_EXP);
 
+    /// One representation of NaN
     pub const NAN: Self = Self(match N {
         NanStyle::IEEE => ((1 << (E + 1)) - 1) << (M - 1),
         NanStyle::FN => (1 << (E + M)) - 1,
         NanStyle::FNUZ => 1 << (E + M),
     });
 
+    /// The largest number of this type
+    ///
+    /// This value would be +∞ if the type has infinities.  Otherwise, it is
+    /// the maximum finite representation.  This value is also the result of
+    /// a positive overflow.
     pub const HUGE: Self = Self(match N {
         NanStyle::IEEE => ((1 << E) - 1) << M,
         NanStyle::FN => (1 << (E + M)) - 2,
         NanStyle::FNUZ => (1 << (E + M)) - 1,
     });
 
+    /// The maximum finite number
     pub const MAX: Self = Self(Self::HUGE.0 - matches!(N, NanStyle::IEEE) as u8);
+
+    /// The smallest positive (subnormal) number
     pub const TINY: Self = Self(1);
+
+    /// The smallest positive normal number
+    ///
+    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
     pub const MIN_POSITIVE: Self = Self(1 << M);
+
+    /// The minimum finite number
+    ///
+    /// Equal to &minus;[`MAX`][Self::MAX]
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
     const ABS_MASK: u8 = (1 << (E + M)) - 1;
@@ -244,7 +278,10 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 }
 
 impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
+    /// Positive infinity (+∞)
     pub const INFINITY: Self = Self(((1 << E) - 1) << M);
+
+    /// Negative infinity (&minus;∞)
     pub const NEG_INFINITY: Self = Self(Self::INFINITY.0 | 1 << (E + M));
 }
 
@@ -252,16 +289,55 @@ impl<const E: u32, const M: u32> F16<E, M> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 16);
     const _HAS_EXPONENT: () = assert!(E > 0);
 
+    /// The radix of the internal representation
     pub const RADIX: u32 = 2;
+
+    /// The number of digits in the significand, including the implicit leading bit
     pub const MANTISSA_DIGITS: u32 = M + 1;
+
+    /// The maximum exponent
+    ///
+    /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
     pub const MAX_EXP: i32 = 1 << (E - 1);
+
+    /// One greater than the minimum normal exponent
+    ///
+    /// Normal numbers ≥ 0.5 &times; 2<sup>`MIN_EXP`</sup>.
+    ///
+    /// This quirk comes from C macros `FLT_MIN_EXP` and friends.  However, it
+    /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
+    /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
+    /// interpreted as normal or subnormal.
     pub const MIN_EXP: i32 = 3 - Self::MAX_EXP;
+
+    /// Positive infinity (+∞)
     pub const INFINITY: Self = Self(((1 << E) - 1) << M);
+
+    /// Negative infinity (&minus;∞)
+    pub const NEG_INFINITY: Self = Self(Self::INFINITY.0 | 1 << (E + M));
+
+    /// One representation of NaN
     pub const NAN: Self = Self(((1 << (E + 1)) - 1) << (M - 1));
+
+    /// Positive infinity, the largest number of this type
     pub const HUGE: Self = Self::INFINITY;
+
+    /// The maximum finite number
+    ///
+    /// Equal to (1 &minus; 2<sup>&minus;[`MANTISSA_DIGITS`][Self::MANTISSA_DIGITS]</sup>) 2<sup>[`MAX_EXP`][Self::MAX_EXP]</sup>
     pub const MAX: Self = Self(Self::INFINITY.0 - 1);
+
+    /// The smallest positive (subnormal) number
     pub const TINY: Self = Self(1);
+
+    /// The smallest positive normal number
+    ///
+    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
     pub const MIN_POSITIVE: Self = Self(1 << M);
+
+    /// The minimum finite number
+    ///
+    /// Equal to &minus;[`MAX`][Self::MAX]
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
     const _IS_LOSSLESS_INTO_F32: () =
@@ -543,15 +619,15 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
 
     /// Probably lossy conversion from [`f32`]
     ///
-    /// NaNs are preserved.  Overflows result in ±[`Self::HUGE`].  Other
-    /// values are rounded to the nearest representable value.
+    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+    /// Other values are rounded to the nearest representable value.
     #[must_use]
     fn from_f32(x: f32) -> Self;
 
     /// Probably lossy conversion from [`f64`]
     ///
-    /// NaNs are preserved.  Overflows result in ±[`Self::HUGE`].  Other
-    /// values are rounded to the nearest representable value.
+    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+    /// Other values are rounded to the nearest representable value.
     #[must_use]
     fn from_f64(x: f64) -> Self;
 
