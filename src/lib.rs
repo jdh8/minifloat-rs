@@ -46,9 +46,11 @@ pub enum NanStyle {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct F8<const E: u32, const M: u32,
-    const N: NanStyle = {NanStyle::IEEE},
-    const B: i32 = {(1 << (E - 1)) - 1},
+pub struct F8<
+    const E: u32,
+    const M: u32,
+    const N: NanStyle = { NanStyle::IEEE },
+    const B: i32 = { (1 << (E - 1)) - 1 },
 >(u8);
 
 #[derive(Debug, Clone, Copy)]
@@ -64,8 +66,8 @@ fn fast_exp2(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
         #[allow(clippy::cast_sign_loss)]
-        s@1..=0x7FF => (s as u64) << 52,
-        s@ -51..=0 => 1 << (51 + s),
+        s @ 1..=0x7FF => (s as u64) << 52,
+        s @ -51..=0 => 1 << (51 + s),
         _ => 0,
     })
 }
@@ -94,20 +96,18 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
     pub const MIN_EXP: i32 = 2 - B;
 
-    const _IS_LOSSLESS_INTO_F32: () = assert!(
-        Self::MAX_EXP <= f32::MAX_EXP &&
-        Self::MIN_EXP >= f32::MIN_EXP
-    );
+    const _IS_LOSSLESS_INTO_F32: () =
+        assert!(Self::MAX_EXP <= f32::MAX_EXP && Self::MIN_EXP >= f32::MIN_EXP);
 
     pub const NAN: Self = Self(match N {
         NanStyle::IEEE => ((1 << (E + 1)) - 1) << (M - 1),
-        NanStyle::FN   => (1 << (E + M)) - 1,
-        NanStyle::FNUZ =>  1 << (E + M),
+        NanStyle::FN => (1 << (E + M)) - 1,
+        NanStyle::FNUZ => 1 << (E + M),
     });
 
     pub const HUGE: Self = Self(match N {
         NanStyle::IEEE => ((1 << E) - 1) << M,
-        NanStyle::FN   => (1 << (E + M)) - 2,
+        NanStyle::FN => (1 << (E + M)) - 2,
         NanStyle::FNUZ => (1 << (E + M)) - 1,
     });
 
@@ -120,7 +120,11 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     #[must_use]
     pub const fn from_bits(v: u8) -> Self {
-        let mask = if E + M >= 7 { 0xFF } else { (1 << (E + M + 1)) - 1 };
+        let mask = if E + M >= 7 {
+            0xFF
+        } else {
+            (1 << (E + M + 1)) - 1
+        };
         Self(v & mask)
     }
 
@@ -133,7 +137,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const fn is_nan(self) -> bool {
         match N {
             NanStyle::IEEE => self.0 & Self::ABS_MASK > Self::HUGE.0,
-            NanStyle::FN   => self.0 & Self::ABS_MASK == Self::NAN.0,
+            NanStyle::FN => self.0 & Self::ABS_MASK == Self::NAN.0,
             NanStyle::FNUZ => self.0 == Self::NAN.0,
         }
     }
@@ -165,11 +169,9 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const fn classify(self) -> FpCategory {
         if self.is_nan() {
             FpCategory::Nan
-        }
-        else if self.is_infinite() {
+        } else if self.is_infinite() {
             FpCategory::Infinite
-        }
-        else {
+        } else {
             let exp_mask = ((1 << E) - 1) << M;
             let man_mask = (1 << M) - 1;
 
@@ -192,7 +194,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     }
 }
 
-impl<const E: u32, const M: u32, const B: i32> F8<E, M, {NanStyle::IEEE}, B> {
+impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
     pub const INFINITY: Self = Self(((1 << E) - 1) << M);
     pub const NEG_INFINITY: Self = Self(Self::INFINITY.0 | 1 << (E + M));
 }
@@ -213,16 +215,18 @@ impl<const E: u32, const M: u32> F16<E, M> {
     pub const MIN_POSITIVE: Self = Self(1 << M);
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
-    const _IS_LOSSLESS_INTO_F32: () = assert!(
-        Self::MAX_EXP <= f32::MAX_EXP &&
-        Self::MIN_EXP >= f32::MIN_EXP
-    );
+    const _IS_LOSSLESS_INTO_F32: () =
+        assert!(Self::MAX_EXP <= f32::MAX_EXP && Self::MIN_EXP >= f32::MIN_EXP);
 
     const ABS_MASK: u16 = (1 << (E + M)) - 1;
 
     #[must_use]
     pub const fn from_bits(v: u16) -> Self {
-        let mask = if E + M >= 15 { 0xFFFF } else { (1 << (E + M + 1)) - 1 };
+        let mask = if E + M >= 15 {
+            0xFFFF
+        } else {
+            (1 << (E + M + 1)) - 1
+        };
         Self(v & mask)
     }
 
@@ -262,9 +266,12 @@ impl<const E: u32, const M: u32> F16<E, M> {
         let man_mask = (1 << M) - 1;
 
         if self.0 & exp_mask == exp_mask {
-            if self.0 & man_mask == 0 { FpCategory::Infinite } else { FpCategory::Nan }
-        }
-        else {
+            if self.0 & man_mask == 0 {
+                FpCategory::Infinite
+            } else {
+                FpCategory::Nan
+            }
+        } else {
             match (self.0 & exp_mask, self.0 & man_mask) {
                 (0, 0) => FpCategory::Zero,
                 (0, _) => FpCategory::Subnormal,
@@ -285,16 +292,16 @@ impl<const E: u32, const M: u32> F16<E, M> {
 }
 
 /// Mutual transmutation
-/// 
+///
 /// This trait provides an interface of mutual raw transmutation.  The methods
 /// default to using `mem::transmute_copy` for the conversion, but you can
 /// override them for safer implementations.
-/// 
+///
 /// In this crate, all `F8` types implement `Transmute<u8>`, and all `F16`
 /// types implement `Transmute<u16>`.
 pub trait Transmute<T>: Copy {
     /// Assert the same size between `T` and `Self`
-    /// 
+    ///
     /// Do not override this constant.
     const _SAME_SIZE: () = assert!(mem::size_of::<T>() == mem::size_of::<Self>());
 
@@ -357,13 +364,11 @@ macro_rules! define_into_f32 {
     };
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32>
-From<F8<E, M, N, B>> for f32 {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f32 {
     define_into_f32!(from, F8<E, M, N, B>);
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32>
-From<F8<E, M, N, B>> for f64 {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64 {
     fn from(x: F8<E, M, N, B>) -> Self {
         f32::from(x).into()
     }
@@ -401,8 +406,14 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialOrd for
         if self == other {
             return Some(Ordering::Equal);
         }
+
         let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
-        Some(if (self.0 > other.0) ^ sign { Ordering::Greater } else { Ordering::Less })
+
+        Some(if (self.0 > other.0) ^ sign {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        })
     }
 }
 
@@ -415,7 +426,11 @@ impl<const E: u32, const M: u32> PartialOrd for F16<E, M> {
             return Some(Ordering::Equal);
         }
         let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
-        Some(if (self.0 > other.0) ^ sign { Ordering::Greater } else { Ordering::Less })
+        Some(if (self.0 > other.0) ^ sign {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        })
     }
 }
 
@@ -443,25 +458,60 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     const N: NanStyle = NanStyle::IEEE;
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
-    #[must_use] fn from_f32(x: f32) -> Self;
-    #[must_use] fn from_f64(x: f64) -> Self;
-    #[must_use] fn is_nan(self) -> bool;
-    #[must_use] fn is_infinite(self) -> bool;
-    #[must_use] fn is_finite(self) -> bool { !self.is_nan() && !self.is_infinite() }
-    #[must_use] fn is_subnormal(self) -> bool { matches!(self.classify(), FpCategory::Subnormal) }
-    #[must_use] fn is_normal(self) -> bool { matches!(self.classify(), FpCategory::Normal) }
-    #[must_use] fn classify(self) -> FpCategory;
-    #[must_use] fn is_sign_positive(self) -> bool { !self.is_sign_negative() }
-    #[must_use] fn is_sign_negative(self) -> bool;
+    #[must_use]
+    fn from_f32(x: f32) -> Self;
+
+    #[must_use]
+    fn from_f64(x: f64) -> Self;
+
+    #[must_use]
+    fn is_nan(self) -> bool;
+
+    #[must_use]
+    fn is_infinite(self) -> bool;
+
+    #[must_use]
+    fn is_finite(self) -> bool {
+        !self.is_nan() && !self.is_infinite()
+    }
+
+    #[must_use]
+    fn is_subnormal(self) -> bool {
+        matches!(self.classify(), FpCategory::Subnormal)
+    }
+
+    #[must_use]
+    fn is_normal(self) -> bool {
+        matches!(self.classify(), FpCategory::Normal)
+    }
+
+    #[must_use]
+    fn classify(self) -> FpCategory;
+
+    #[must_use]
+    fn is_sign_positive(self) -> bool {
+        !self.is_sign_negative()
+    }
+
+    #[must_use]
+    fn is_sign_negative(self) -> bool;
 
     #[must_use]
     fn max(self, other: Self) -> Self {
-        if self >= other || other.is_nan() { self } else { other }
+        if self >= other || other.is_nan() {
+            self
+        } else {
+            other
+        }
     }
 
     #[must_use]
     fn min(self, other: Self) -> Self {
-        if self <= other || other.is_nan() { self } else { other }
+        if self <= other || other.is_nan() {
+            self
+        } else {
+            other
+        }
     }
 }
 
@@ -485,7 +535,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
         let magnitude = magnitude as i32 - diff;
 
         if magnitude < 1 << M {
-            let ticks = f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            let ticks =
+                f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let ticks = ticks.round_ties_even() as u8;
             return Self((u8::from(N != NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks);
@@ -519,12 +570,29 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
         Self(magnitude.min(i64::from(Self::HUGE.0)) as u8 | sign_bit)
     }
 
-    fn is_nan(self) -> bool { self.is_nan() }
-    fn is_infinite(self) -> bool { self.is_infinite() }
-    fn is_finite(self) -> bool { self.is_finite() }
-    fn classify(self) -> FpCategory { self.classify() }
-    fn is_sign_positive(self) -> bool { self.is_sign_positive() }
-    fn is_sign_negative(self) -> bool { self.is_sign_negative() }
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn is_infinite(self) -> bool {
+        self.is_infinite()
+    }
+
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
+
+    fn classify(self) -> FpCategory {
+        self.classify()
+    }
+
+    fn is_sign_positive(self) -> bool {
+        self.is_sign_positive()
+    }
+
+    fn is_sign_negative(self) -> bool {
+        self.is_sign_negative()
+    }
 }
 
 impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
@@ -545,7 +613,8 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
         let magnitude = magnitude as i32 - diff;
 
         if magnitude < 1 << M {
-            let ticks = f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            let ticks =
+                f64::from(x.abs()) * fast_exp2(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             return Self(ticks.round_ties_even() as u16 | sign_bit);
         }
@@ -577,10 +646,27 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
         Self(magnitude.min(i64::from(Self::HUGE.0)) as u16 | sign_bit)
     }
 
-    fn is_nan(self) -> bool { self.is_nan() }
-    fn is_infinite(self) -> bool { self.is_infinite() }
-    fn is_finite(self) -> bool { self.is_finite() }
-    fn classify(self) -> FpCategory { self.classify() }
-    fn is_sign_positive(self) -> bool { self.is_sign_positive() }
-    fn is_sign_negative(self) -> bool { self.is_sign_negative() }
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn is_infinite(self) -> bool {
+        self.is_infinite()
+    }
+
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
+
+    fn classify(self) -> FpCategory {
+        self.classify()
+    }
+
+    fn is_sign_positive(self) -> bool {
+        self.is_sign_positive()
+    }
+
+    fn is_sign_negative(self) -> bool {
+        self.is_sign_negative()
+    }
 }
