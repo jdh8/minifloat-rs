@@ -20,7 +20,7 @@ use core::ops::Neg;
 ///
 /// The variants follow [LLVM/MLIR naming conventions][llvm] derived from
 /// their differences to [IEEE 754][ieee].
-/// 
+///
 /// [llvm]: https://llvm.org/doxygen/structllvm_1_1APFloatBase.html
 /// [ieee]: https://en.wikipedia.org/wiki/IEEE_754
 #[allow(clippy::upper_case_acronyms)]
@@ -449,50 +449,97 @@ impl<const E: u32, const M: u32> Neg for F16<E, M> {
 }
 
 /// Generic trait for minifloat types
+///
+/// We are **not** going to implement [`num_traits::Float`][flt] because:
+///
+/// 1. [`FN`][NanStyle::FN] and [`FNUZ`][NanStyle::FNUZ] types do not have infinities.
+/// 2. [`FNUZ`][NanStyle::FNUZ] types do not have a negative zero.
+/// 3. We don't have plans for [arithmetic operations][ops] yet.
+///
+/// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
+/// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
 pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
+    /// Exponent width
     const E: u32;
+
+    /// Significand (mantissa) precision
     const M: u32;
+
+    /// NaN encoding style
     const N: NanStyle = NanStyle::IEEE;
+
+    /// Exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
+    /// The largest number of this type
+    ///
+    /// This value would be +∞ if the type has infinities.  Otherwise, it is
+    /// the maximum finite representation.  This value is also the result of
+    /// a positive overflow.
+    const HUGE: Self;
+
+    /// Probably lossy conversion from [`f32`]
+    ///
+    /// NaNs are preserved.  Overflows result in ±[`Self::HUGE`].  Other
+    /// values are rounded to the nearest representable value.
     #[must_use]
     fn from_f32(x: f32) -> Self;
 
+    /// Probably lossy conversion from [`f64`]
+    ///
+    /// NaNs are preserved.  Overflows result in ±[`Self::HUGE`].  Other
+    /// values are rounded to the nearest representable value.
     #[must_use]
     fn from_f64(x: f64) -> Self;
 
+    /// Check if the value is NaN
     #[must_use]
     fn is_nan(self) -> bool;
 
+    /// Check if the value is positive or negative infinity
     #[must_use]
     fn is_infinite(self) -> bool;
 
+    /// Check if the value is finite, i.e. neither infinite nor NaN
     #[must_use]
     fn is_finite(self) -> bool {
         !self.is_nan() && !self.is_infinite()
     }
 
+    /// Check if the value is [subnormal]
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
     fn is_subnormal(self) -> bool {
         matches!(self.classify(), FpCategory::Subnormal)
     }
 
+    /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
     fn is_normal(self) -> bool {
         matches!(self.classify(), FpCategory::Normal)
     }
 
+    /// Classify the value into a floating-point category
+    ///
+    /// If only one property is going to be tested, it is generally faster to
+    /// use the specific predicate instead.
     #[must_use]
     fn classify(self) -> FpCategory;
 
+    /// Check if the sign bit is clear
     #[must_use]
     fn is_sign_positive(self) -> bool {
         !self.is_sign_negative()
     }
 
+    /// Check if the sign bit is set
     #[must_use]
     fn is_sign_negative(self) -> bool;
 
+    /// Get the maximum of two numbers, ignoring NaN
     #[must_use]
     fn max(self, other: Self) -> Self {
         if self >= other || other.is_nan() {
@@ -502,6 +549,7 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
         }
     }
 
+    /// Get the minimum of two numbers, ignoring NaN
     #[must_use]
     fn min(self, other: Self) -> Self {
         if self <= other || other.is_nan() {
@@ -517,6 +565,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
     const M: u32 = M;
     const N: NanStyle = N;
     const B: i32 = B;
+
+    const HUGE: Self = Self::HUGE;
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
@@ -595,6 +645,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
 impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
     const E: u32 = E;
     const M: u32 = M;
+
+    const HUGE: Self = Self::HUGE;
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
