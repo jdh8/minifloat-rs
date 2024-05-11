@@ -398,40 +398,33 @@ impl<const E: u32, const M: u32> PartialEq for F16<E, M> {
     }
 }
 
+macro_rules! impl_partial_cmp {
+    () => {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            if self.is_nan() || other.is_nan() {
+                return None;
+            }
+            if self == other {
+                return Some(Ordering::Equal);
+            }
+
+            let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
+
+            Some(if (self.0 > other.0) ^ sign {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            })
+        }
+    };
+}
+
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialOrd for F8<E, M, N, B> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.is_nan() || other.is_nan() {
-            return None;
-        }
-        if self == other {
-            return Some(Ordering::Equal);
-        }
-
-        let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
-
-        Some(if (self.0 > other.0) ^ sign {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        })
-    }
+    impl_partial_cmp!();
 }
 
 impl<const E: u32, const M: u32> PartialOrd for F16<E, M> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.is_nan() || other.is_nan() {
-            return None;
-        }
-        if self == other {
-            return Some(Ordering::Equal);
-        }
-        let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
-        Some(if (self.0 > other.0) ^ sign {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        })
-    }
+    impl_partial_cmp!();
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Neg for F8<E, M, N, B> {
