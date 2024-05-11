@@ -1,10 +1,18 @@
-# minifloat-rs
-Rust version of [jdh8/minifloat](https://github.com/jdh8/minifloat)
+minifloat
+=========
+[![Crates.io](https://img.shields.io/crates/v/minifloat.svg)](https://crates.io/crates/minifloat)
+[![Documentation](https://docs.rs/minifloat/badge.svg)](https://docs.rs/minifloat)
 
-This crate provides emulation of minifloats up to 16 bits.  Many parameters
-are configurable, including
+Rust const generic library for minifloats
 
-- The exponent width
-- The mantissa (significand) width
-- (F8-only) the bias of the exponent
-- (F8-only) NaN encodings: IEEE, FN, or FNUZ
+This crate provides emulation of minifloats up to 16 bits.  This is done with
+two generic structs, `F8` and `F16`, which take up to 8 and 16 bits of storage
+respectively.  Many parameters are configurable, including
+
+- Exponent width
+- Significand (mantissa) precision
+- (`F8`-only) Exponent bias
+- (`F8`-only) NaN encodings: IEEE, FN, or FNUZ
+
+Note that there is always a sign bit, so `F8<4, 3>` already uses up all 8 bits:
+1 sign bit, 4 exponent bits, and 3 significand bits.
