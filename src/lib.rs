@@ -92,6 +92,7 @@ pub type f16 = F16<5, 10>;
 #[allow(non_camel_case_types)]
 pub type bf16 = F16<8, 7>;
 
+// Fast 2<sup>`x`</sup> with bit manipulation
 fn fast_exp2(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
@@ -102,7 +103,8 @@ fn fast_exp2(x: i32) -> f64 {
     })
 }
 
-macro_rules! define_round_for_mantissa {
+// Round `x` to the nearest representable value with `M` bits of precision
+macro_rules! define_round_to_precision {
     ($name:ident, $f:ty) => {
         fn $name<const M: u32>(x: $f) -> $f {
             let x = x.to_bits();
@@ -114,8 +116,8 @@ macro_rules! define_round_for_mantissa {
     };
 }
 
-define_round_for_mantissa!(round_f32_for_mantissa, f32);
-define_round_for_mantissa!(round_f64_for_mantissa, f64);
+define_round_to_precision!(round_f32_to_precision, f32);
+define_round_to_precision!(round_f64_to_precision, f64);
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
@@ -597,7 +599,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
-        let bits = round_f32_for_mantissa::<M>(x).to_bits();
+        let bits = round_f32_to_precision::<M>(x).to_bits();
         let sign_bit = ((bits >> 31) as u8) << (E + M);
 
         if x.is_nan() {
@@ -622,7 +624,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for 
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f64(x: f64) -> Self {
-        let bits = round_f64_for_mantissa::<M>(x).to_bits();
+        let bits = round_f64_to_precision::<M>(x).to_bits();
         let sign_bit = ((bits >> 63) as u8) << (E + M);
 
         if x.is_nan() {
@@ -677,7 +679,7 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
-        let bits = round_f32_for_mantissa::<M>(x).to_bits();
+        let bits = round_f32_to_precision::<M>(x).to_bits();
         let sign_bit = ((bits >> 31) as u16) << (E + M);
 
         if x.is_nan() {
@@ -701,7 +703,7 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f64(x: f64) -> Self {
-        let bits = round_f64_for_mantissa::<M>(x).to_bits();
+        let bits = round_f64_to_precision::<M>(x).to_bits();
         let sign_bit = ((bits >> 63) as u16) << (E + M);
 
         if x.is_nan() {
