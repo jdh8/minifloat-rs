@@ -18,8 +18,11 @@ use core::ops::Neg;
 
 /// NaN encoding style
 ///
-/// The variants follow LLVM/MLIR naming conventions derived from their
-/// differences to IEEE 754.
+/// The variants follow [LLVM/MLIR naming conventions][llvm] derived from
+/// their differences to [IEEE 754][ieee].
+/// 
+/// [llvm]: https://llvm.org/doxygen/structllvm_1_1APFloatBase.html
+/// [ieee]: https://en.wikipedia.org/wiki/IEEE_754
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, ConstParamTy, PartialEq, Eq)]
 pub enum NanStyle {
@@ -294,10 +297,10 @@ impl<const E: u32, const M: u32> F16<E, M> {
 /// Mutual transmutation
 ///
 /// This trait provides an interface of mutual raw transmutation.  The methods
-/// default to using `mem::transmute_copy` for the conversion, but you can
-/// override them for safer implementations.
+/// default to using [`core::mem::transmute_copy`] for the conversion, but you
+/// can override them for safer implementations.
 ///
-/// In this crate, all `F8` types implement `Transmute<u8>`, and all `F16`
+/// In this crate, all [`F8`] types implement `Transmute<u8>`, and all [`F16`]
 /// types implement `Transmute<u16>`.
 pub trait Transmute<T>: Copy {
     /// Assert the same size between `T` and `Self`
@@ -445,6 +448,7 @@ impl<const E: u32, const M: u32> Neg for F16<E, M> {
     }
 }
 
+/// Generic trait for minifloat types
 pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     const E: u32;
     const M: u32;
