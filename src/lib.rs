@@ -12,8 +12,9 @@
 mod test;
 use core::cmp::Ordering;
 use core::marker::ConstParamTy;
+use core::mem;
 use core::num::FpCategory;
-use std::ops::Neg;
+use core::ops::Neg;
 
 /// NaN encoding style
 ///
@@ -283,12 +284,32 @@ impl<const E: u32, const M: u32> F16<E, M> {
     }
 }
 
-pub trait Underlying<T>: Copy {
-    fn from_bits(v: T) -> Self;
-    fn to_bits(self) -> T;
+/// Mutual transmutation
+/// 
+/// This trait provides an interface of mutual raw transmutation.  The methods
+/// default to using `mem::transmute_copy` for the conversion, but you can
+/// override them for safer implementations.
+/// 
+/// In this crate, all `F8` types implement `Transmute<u8>`, and all `F16`
+/// types implement `Transmute<u16>`.
+pub trait Transmute<T>: Copy {
+    /// Assert the same size between `T` and `Self`
+    /// 
+    /// Do not override this constant.
+    const _SAME_SIZE: () = assert!(mem::size_of::<T>() == mem::size_of::<Self>());
+
+    /// Raw transmutation from `T`
+    fn from_bits(v: T) -> Self {
+        unsafe { mem::transmute_copy(&v) }
+    }
+
+    /// Raw transmutation to `T`
+    fn to_bits(self) -> T {
+        unsafe { mem::transmute_copy(&self) }
+    }
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Underlying<u8> for F8<E, M, N, B> {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Transmute<u8> for F8<E, M, N, B> {
     fn from_bits(v: u8) -> Self {
         Self::from_bits(v)
     }
@@ -298,7 +319,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Underlying<u8>
     }
 }
 
-impl<const E: u32, const M: u32> Underlying<u16> for F16<E, M> {
+impl<const E: u32, const M: u32> Transmute<u16> for F16<E, M> {
     fn from_bits(v: u16) -> Self {
         Self::from_bits(v)
     }

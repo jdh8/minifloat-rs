@@ -9,7 +9,7 @@
 #![allow(clippy::float_cmp)]
 
 use crate::NanStyle::{FN, FNUZ};
-use crate::{Minifloat, Underlying, F16, F8};
+use crate::{Minifloat, Transmute, F16, F8};
 use core::fmt::Debug;
 
 macro_rules! for_each_type {
@@ -76,7 +76,7 @@ fn test_finite_bits() {
     assert_eq!(crate::bf16::from_f32(-1.25).to_bits(), 0b1_0111_1111_0100000);
 }
 
-fn test_equality_f8<T: Minifloat + Underlying<u8> + Debug>()
+fn test_equality_f8<T: Minifloat + Transmute<u8> + Debug>()
 where f32: From<T>, f64: From<T> {
     assert_eq!(f32::from(T::from_f32(-3.0)), -3.0);
     assert_eq!(f64::from(T::from_f64(-3.0)), -3.0);
@@ -91,7 +91,7 @@ where f32: From<T>, f64: From<T> {
     });
 }
 
-fn test_equality_f16<T: Minifloat + Underlying<u16> + Debug>()
+fn test_equality_f16<T: Minifloat + Transmute<u16> + Debug>()
 where f32: From<T>, f64: From<T> {
     assert_eq!(f32::from(T::from_f32(-3.0)), -3.0);
     assert_eq!(f64::from(T::from_f64(-3.0)), -3.0);
@@ -111,7 +111,7 @@ fn equality() {
     for_each_type!(test_equality_f8, test_equality_f16);
 }
 
-fn test_comparison_f8<T: Minifloat + Underlying<u8> + Debug>()
+fn test_comparison_f8<T: Minifloat + Transmute<u8> + Debug>()
 where f32: From<T> {
     (0..=0xFF).map(T::from_bits).for_each(|x| {
         (0..=0xFF).map(T::from_bits).for_each(|y| {
@@ -120,7 +120,7 @@ where f32: From<T> {
     });
 }
 
-fn test_comparison_f16<T: Minifloat + Underlying<u16> + Debug>()
+fn test_comparison_f16<T: Minifloat + Transmute<u16> + Debug>()
 where f32: From<T> {
     let x_step = 17 << (T::E + T::M) >> 15 | 1;
     let y_step = 19 << (T::E + T::M) >> 15 | 1;
@@ -137,7 +137,7 @@ fn comparison() {
     for_each_type!(test_comparison_f8, test_comparison_f16);
 }
 
-fn test_neg_f8<T: Minifloat + Underlying<u8> + Debug>()
+fn test_neg_f8<T: Minifloat + Transmute<u8> + Debug>()
 where f32: From<T> {
     (0..=0xFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(-f32::from(x));
@@ -145,7 +145,7 @@ where f32: From<T> {
     });
 }
 
-fn test_neg_f16<T: Minifloat + Underlying<u16> + Debug>()
+fn test_neg_f16<T: Minifloat + Transmute<u16> + Debug>()
 where f32: From<T> {
     (0..=0xFFFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(-f32::from(x));
@@ -158,7 +158,7 @@ fn neg() {
     for_each_type!(test_neg_f8, test_neg_f16);
 }
 
-fn test_identity_conversion_f8<T: Minifloat + Underlying<u8> + Debug>()
+fn test_identity_conversion_f8<T: Minifloat + Transmute<u8> + Debug>()
 where f32: From<T> {
     (0..=0xFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(f32::from(x));
@@ -166,7 +166,7 @@ where f32: From<T> {
     });
 }
 
-fn test_identity_conversion_f16<T: Minifloat + Underlying<u16> + Debug>()
+fn test_identity_conversion_f16<T: Minifloat + Transmute<u16> + Debug>()
 where f32: From<T> {
     (0..=0xFFFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(f32::from(x));
