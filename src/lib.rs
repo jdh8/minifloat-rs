@@ -7,16 +7,16 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 //! A const generic library for minifloats
-//! 
+//!
 //! This crate provides emulation of minifloats up to 16 bits.  This is done
 //! with two generic structs, [`F8`] and [`F16`], which take up to 8 and 16
 //! bits of storage respectively.  Many parameters are configurable, including
-//! 
+//!
 //! - Exponent width
 //! - Significand (mantissa) precision
 //! - ([`F8`]-only) Exponent bias
 //! - ([`F8`]-only) NaN encodings: IEEE, FN, or FNUZ
-//! 
+//!
 //! Note that there is always a sign bit, so [`F8<4, 3>`] already uses up all
 //! 8 bits: 1 sign bit, 4 exponent bits, and 3 significand bits.
 
@@ -64,6 +64,11 @@ pub enum NanStyle {
 }
 
 /// Minifloat taking up to 8 bits with configurable bias and NaN encoding
+///
+/// * `E`: exponent width
+/// * `M`: significand (mantissa) precision
+/// * `N`: NaN encoding style
+/// * `B`: exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
 #[derive(Debug, Clone, Copy)]
 pub struct F8<
     const E: u32,
@@ -73,10 +78,13 @@ pub struct F8<
 >(u8);
 
 /// Minifloat taking up to 16 bits
+///
+/// * `E`: exponent width
+/// * `M`: significand (mantissa) precision
 #[derive(Debug, Clone, Copy)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
-/// [F16<5, 10>], IEEE binary16, half precision 
+/// [F16<5, 10>], IEEE binary16, half precision
 #[allow(non_camel_case_types)]
 pub type f16 = F16<5, 10>;
 
