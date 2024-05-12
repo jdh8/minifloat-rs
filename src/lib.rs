@@ -656,6 +656,27 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
+    /// The radix of the internal representation
+    const RADIX: u32 = 2;
+
+    /// The number of digits in the significand, including the implicit leading bit
+    const MANTISSA_DIGITS: u32 = Self::M + 1;
+
+    /// The maximum exponent
+    ///
+    /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
+    const MAX_EXP: i32 = (1 << Self::E) - Self::B - matches!(Self::N, NanStyle::IEEE) as i32;
+
+    /// One greater than the minimum normal exponent
+    ///
+    /// Normal numbers ≥ 0.5 &times; 2<sup>`MIN_EXP`</sup>.
+    ///
+    /// This quirk comes from C macros `FLT_MIN_EXP` and friends.  However, it
+    /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
+    /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
+    /// interpreted as normal or subnormal.
+    const MIN_EXP: i32 = 2 - Self::B;
+
     /// One representation of NaN
     const NAN: Self;
 
@@ -665,6 +686,22 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// the maximum finite representation.  This value is also the result of
     /// a positive overflow.
     const HUGE: Self;
+
+    /// The maximum finite number
+    const MAX: Self;
+
+    /// The smallest positive (subnormal) number
+    const TINY: Self;
+
+    /// The smallest positive normal number
+    ///
+    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
+    const MIN_POSITIVE: Self;
+
+    /// The minimum finite number
+    ///
+    /// Equal to &minus;[`MAX`][Self::MAX]
+    const MIN: Self;
 
     /// Probably lossy conversion from [`f32`]
     ///
@@ -795,6 +832,10 @@ where
 
     const NAN: Self = Self::NAN;
     const HUGE: Self = Self::HUGE;
+    const MAX: Self = Self::MAX;
+    const TINY: Self = Self::TINY;
+    const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+    const MIN: Self = Self::MIN;
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
@@ -883,6 +924,10 @@ where
 
     const NAN: Self = Self::NAN;
     const HUGE: Self = Self::HUGE;
+    const MAX: Self = Self::MAX;
+    const TINY: Self = Self::TINY;
+    const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+    const MIN: Self = Self::MIN;
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
