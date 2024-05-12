@@ -28,6 +28,7 @@
 
 mod test;
 use core::cmp::Ordering;
+use core::f64::consts::LOG10_2;
 use core::marker::ConstParamTy;
 use core::mem;
 use core::num::FpCategory;
@@ -148,6 +149,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     pub const RADIX: u32 = 2;
 
     /// The number of digits in the significand, including the implicit leading bit
+    ///
+    /// Equal to `M` + 1
     pub const MANTISSA_DIGITS: u32 = M + 1;
 
     /// The maximum exponent
@@ -341,6 +344,8 @@ impl<const E: u32, const M: u32> F16<E, M> {
     pub const RADIX: u32 = 2;
 
     /// The number of digits in the significand, including the implicit leading bit
+    ///
+    /// Equal to `M` + 1
     pub const MANTISSA_DIGITS: u32 = M + 1;
 
     /// The maximum exponent
@@ -660,6 +665,8 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     const RADIX: u32 = 2;
 
     /// The number of digits in the significand, including the implicit leading bit
+    ///
+    /// Equal to `M` + 1
     const MANTISSA_DIGITS: u32 = Self::M + 1;
 
     /// The maximum exponent
@@ -676,6 +683,24 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
     /// interpreted as normal or subnormal.
     const MIN_EXP: i32 = 2 - Self::B;
+
+    /// Approximate number of significant decimal digits
+    ///
+    /// Equal to floor([`M`][Self::M] log<sub>10</sub>(2))
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    const DIGITS: u32 = (Self::M as f64 * LOG10_2) as u32;
+
+    /// Maximum <var>x</var> such that 10<sup>`x`</sup> is normal
+    ///
+    /// Equal to floor(log<sub>10</sub>([`MAX`][Self::MAX]))
+    #[allow(clippy::cast_possible_truncation)]
+    const MAX_10_EXP: i32 = (Self::MAX_EXP as f64 * LOG10_2) as i32;
+
+    /// Minimum <var>x</var> such that 10<sup>`x`</sup> is normal
+    ///
+    /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
+    #[allow(clippy::cast_possible_truncation)]
+    const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * LOG10_2) as i32;
 
     /// One representation of NaN
     const NAN: Self;
