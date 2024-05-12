@@ -196,9 +196,13 @@ fn neg() {
 fn test_identity_conversion_f8<T: Minifloat + Transmute<u8> + Debug>()
 where
     f32: From<T>,
+    f64: From<T>,
 {
     (0..=0xFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(f32::from(x));
+        assert!(are_equivalent!(x, y), "{x:?} is not {y:?}");
+
+        let y = T::from_f64(f64::from(x));
         assert!(are_equivalent!(x, y), "{x:?} is not {y:?}");
     });
 }
@@ -206,9 +210,13 @@ where
 fn test_identity_conversion_f16<T: Minifloat + Transmute<u16> + Debug>()
 where
     f32: From<T>,
+    f64: From<T>,
 {
     (0..=0xFFFF).map(T::from_bits).for_each(|x| {
         let y = T::from_f32(f32::from(x));
+        assert!(are_equivalent!(x, y), "{x:?} is not {y:?}");
+
+        let y = T::from_f64(f64::from(x));
         assert!(are_equivalent!(x, y), "{x:?} is not {y:?}");
     });
 }

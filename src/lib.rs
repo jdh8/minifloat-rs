@@ -960,14 +960,14 @@ where
     }
 }
 
-macro_rules! define_into_f32 {
+macro_rules! define_f32_from {
     ($name:ident, $f:ty) => {
         fn $name(x: $f) -> f32 {
             let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
             let magnitude = x.0 & <$f>::ABS_MASK;
 
             if x.is_nan() {
-                return f32::NAN * sign;
+                return f32::NAN.copysign(sign);
             }
             if x.is_infinite() {
                 return f32::INFINITY * sign;
@@ -988,44 +988,78 @@ macro_rules! define_into_f32 {
     };
 }
 
+/// Lossless conversion to `f32`
+///
+/// Enabled only when every value of the source type is representable in `f32`.
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f32
 where
     Check<{ F8::<E, M, N, B>::VALID }>: True,
     Check<{ F8::<E, M, N, B>::MAX_EXP <= Self::MAX_EXP }>: True,
     Check<{ F8::<E, M, N, B>::MIN_EXP >= Self::MIN_EXP }>: True,
 {
-    define_into_f32!(from, F8<E, M, N, B>);
+    define_f32_from!(from, F8<E, M, N, B>);
 }
 
-//TODO: make this independent of `f32`
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64
-where
-    Check<{ F8::<E, M, N, B>::VALID }>: True,
-    Check<{ F8::<E, M, N, B>::MAX_EXP <= f32::MAX_EXP }>: True,
-    Check<{ F8::<E, M, N, B>::MIN_EXP >= f32::MIN_EXP }>: True,
-{
-    fn from(x: F8<E, M, N, B>) -> Self {
-        f32::from(x).into()
-    }
-}
-
+/// Lossless conversion to `f32`
+///
+/// Enabled only when every value of the source type is representable in `f32`.
 impl<const E: u32, const M: u32> From<F16<E, M>> for f32
 where
     Check<{ F16::<E, M>::VALID }>: True,
     Check<{ F16::<E, M>::MAX_EXP <= Self::MAX_EXP }>: True,
     Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
 {
-    define_into_f32!(from, F16<E, M>);
+    define_f32_from!(from, F16<E, M>);
 }
 
-//TODO: make this independent of `f32`
+macro_rules! define_f64_from {
+    ($name:ident, $f:ty) => {
+        fn $name(x: $f) -> f64 {
+            let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
+            let magnitude = x.0 & <$f>::ABS_MASK;
+
+            if x.is_nan() {
+                return f64::NAN.copysign(sign);
+            }
+            if x.is_infinite() {
+                return f64::INFINITY * sign;
+            }
+            if magnitude < 1 << M {
+                #[allow(clippy::cast_possible_wrap)]
+                let shift = <$f>::MIN_EXP - <$f>::MANTISSA_DIGITS as i32;
+                #[allow(clippy::cast_possible_truncation)]
+                return (fast_exp2(shift) * sign * f64::from(magnitude)) as f64;
+            }
+            let shift = f64::MANTISSA_DIGITS - <$f>::MANTISSA_DIGITS;
+            #[allow(clippy::cast_sign_loss)]
+            let diff = (<$f>::MIN_EXP - f64::MIN_EXP) as u64;
+            let diff = diff << (f64::MANTISSA_DIGITS - 1);
+            let sign = u64::from(x.is_sign_negative()) << 63;
+            f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
+        }
+    };
+}
+
+/// Lossless conversion to `f64`
+///
+/// Enabled only when every value of the source type is representable in `f64`.
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64
+where
+    Check<{ F8::<E, M, N, B>::VALID }>: True,
+    Check<{ F8::<E, M, N, B>::MAX_EXP <= Self::MAX_EXP }>: True,
+    Check<{ F8::<E, M, N, B>::MIN_EXP >= Self::MIN_EXP }>: True,
+{
+    define_f64_from!(from, F8<E, M, N, B>);
+}
+
+/// Lossless conversion to `f64`
+///
+/// Enabled only when every value of the source type is representable in `f64`.
 impl<const E: u32, const M: u32> From<F16<E, M>> for f64
 where
     Check<{ F16::<E, M>::VALID }>: True,
-    Check<{ F16::<E, M>::MAX_EXP <= f32::MAX_EXP }>: True,
-    Check<{ F16::<E, M>::MIN_EXP >= f32::MIN_EXP }>: True,
+    Check<{ F16::<E, M>::MAX_EXP <= Self::MAX_EXP }>: True,
+    Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
 {
-    fn from(x: F16<E, M>) -> Self {
-        f32::from(x).into()
-    }
+    define_f64_from!(from, F16<E, M>);
 }
