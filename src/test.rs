@@ -49,6 +49,9 @@ struct BiasConstant<const N: i32>;
 fn test_finite_bits_f8<const E: u32, const M: u32>(x: f32, bits: u8)
 where
     BiasConstant<{ (1 << (E - 1)) - 1 }>:,
+    F8<E, M>: Minifloat,
+    F8<E, M, { FN }>: Minifloat,
+    F8<E, M, { FNUZ }>: Minifloat,
 {
     assert_eq!(F8::<E, M>::from_f32(x).to_bits(), bits);
     assert_eq!(F8::<E, M, { FN }>::from_f32(x).to_bits(), bits);

@@ -23,6 +23,7 @@
 #![feature(adt_const_params)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![allow(private_bounds)]
 #![warn(missing_docs)]
 
 mod test;
@@ -70,6 +71,11 @@ pub enum NanStyle {
 /// * `M`: significand (mantissa) precision
 /// * `N`: NaN encoding style
 /// * `B`: exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
+/// 
+/// Constraints:
+/// * `E` + `M` < 8 (there is always a sign bit)
+/// * `E` > 0 (or use an integer type instead)
+/// * `M` > 0 if `N` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
 #[derive(Debug, Clone, Copy, Default)]
 pub struct F8<
     const E: u32,
@@ -92,6 +98,14 @@ pub type f16 = F16<5, 10>;
 /// [`F16<8, 7>`], bfloat16 format
 #[allow(non_camel_case_types)]
 pub type bf16 = F16<8, 7>;
+
+/// Check a condition at compile time
+struct Check<const COND: bool>;
+
+/// The trait for [`Check<true>`]
+trait True {}
+
+impl True for Check<true> {}
 
 /// Fast 2<sup>`x`</sup> with bit manipulation
 fn fast_exp2(x: i32) -> f64 {
@@ -121,8 +135,8 @@ define_round_to_precision!(round_f32_to_precision, f32);
 define_round_to_precision!(round_f64_to_precision, f64);
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
-    const _HAS_VALID_STORAGE: () = assert!(E + M < 8);
-    const _HAS_EXPONENT: () = assert!(E > 0);
+    /// Check if the parameters are valid
+    const VALID: bool = E + M < 8 && E > 0 && (M > 0 || !matches!(N, NanStyle::IEEE));
 
     /// The radix of the internal representation
     pub const RADIX: u32 = 2;
@@ -144,9 +158,6 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
     /// interpreted as normal or subnormal.
     pub const MIN_EXP: i32 = 2 - B;
-
-    const _IS_LOSSLESS_INTO_F32: () =
-        assert!(Self::MAX_EXP <= f32::MAX_EXP && Self::MIN_EXP >= f32::MIN_EXP);
 
     /// One representation of NaN
     pub const NAN: Self = Self(match N {
@@ -182,11 +193,15 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     /// Equal to &minus;[`MAX`][Self::MAX]
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
+    /// Magnitude mask for internal usage
     const ABS_MASK: u8 = (1 << (E + M)) - 1;
 
     /// Raw transmutation from `u8`
     #[must_use]
-    pub const fn from_bits(v: u8) -> Self {
+    pub const fn from_bits(v: u8) -> Self
+    where
+        Check<{ Self::VALID }>: True,
+    {
         let mask = if E + M >= 7 {
             0xFF
         } else {
@@ -203,7 +218,10 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     /// Check if the value is NaN
     #[must_use]
-    pub const fn is_nan(self) -> bool {
+    pub const fn is_nan(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         match N {
             NanStyle::IEEE => self.0 & Self::ABS_MASK > Self::HUGE.0,
             NanStyle::FN => self.0 & Self::ABS_MASK == Self::NAN.0,
@@ -213,13 +231,19 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     /// Check if the value is positive or negative infinity
     #[must_use]
-    pub const fn is_infinite(self) -> bool {
+    pub const fn is_infinite(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         matches!(N, NanStyle::IEEE) && self.0 & Self::ABS_MASK == Self::HUGE.0
     }
 
     /// Check if the value is finite, i.e. neither infinite nor NaN
     #[must_use]
-    pub const fn is_finite(self) -> bool {
+    pub const fn is_finite(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         match N {
             NanStyle::IEEE => self.0 & Self::ABS_MASK < Self::HUGE.0,
             _ => !self.is_nan(),
@@ -230,7 +254,10 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     ///
     /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
-    pub const fn is_subnormal(self) -> bool {
+    pub const fn is_subnormal(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         matches!(self.classify(), FpCategory::Subnormal)
     }
 
@@ -238,7 +265,10 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     ///
     /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
-    pub const fn is_normal(self) -> bool {
+    pub const fn is_normal(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         matches!(self.classify(), FpCategory::Normal)
     }
 
@@ -247,7 +277,10 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     /// If only one property is going to be tested, it is generally faster to
     /// use the specific predicate instead.
     #[must_use]
-    pub const fn classify(self) -> FpCategory {
+    pub const fn classify(self) -> FpCategory
+    where
+        Check<{ Self::VALID }>: True,
+    {
         if self.is_nan() {
             FpCategory::Nan
         } else if self.is_infinite() {
@@ -295,9 +328,6 @@ impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
 }
 
 impl<const E: u32, const M: u32> F16<E, M> {
-    const _HAS_VALID_STORAGE: () = assert!(E + M < 16);
-    const _HAS_EXPONENT: () = assert!(E > 0);
-
     /// The radix of the internal representation
     pub const RADIX: u32 = 2;
 
@@ -349,9 +379,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
     /// Equal to &minus;[`MAX`][Self::MAX]
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
-    const _IS_LOSSLESS_INTO_F32: () =
-        assert!(Self::MAX_EXP <= f32::MAX_EXP && Self::MIN_EXP >= f32::MIN_EXP);
-
+    /// Magnitude mask for internal usage
     const ABS_MASK: u16 = (1 << (E + M)) - 1;
 
     /// Raw transmutation from `u16`
@@ -476,7 +504,10 @@ pub trait Transmute<T>: Copy {
     }
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Transmute<u8> for F8<E, M, N, B> {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Transmute<u8> for F8<E, M, N, B>
+where
+    Check<{ Self::VALID }>: True,
+{
     fn from_bits(v: u8) -> Self {
         Self::from_bits(v)
     }
@@ -524,11 +555,17 @@ macro_rules! define_into_f32 {
     };
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f32 {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f32
+where
+    Check<{ F8::<E, M, N, B>::VALID }>: True,
+{
     define_into_f32!(from, F8<E, M, N, B>);
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64 {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64
+where
+    Check<{ F8::<E, M, N, B>::VALID }>: True,
+{
     fn from(x: F8<E, M, N, B>) -> Self {
         f32::from(x).into()
     }
@@ -544,7 +581,10 @@ impl<const E: u32, const M: u32> From<F16<E, M>> for f64 {
     }
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialEq for F8<E, M, N, B> {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialEq for F8<E, M, N, B>
+where
+    Check<{ Self::VALID }>: True,
+{
     fn eq(&self, other: &Self) -> bool {
         let eq = self.0 == other.0 && !self.is_nan();
         eq || !matches!(N, NanStyle::FNUZ) && (self.0 | other.0) & Self::ABS_MASK == 0
@@ -579,7 +619,10 @@ macro_rules! impl_partial_cmp {
     };
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialOrd for F8<E, M, N, B> {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialOrd for F8<E, M, N, B>
+where
+    Check<{ Self::VALID }>: True,
+{
     impl_partial_cmp!();
 }
 
@@ -756,7 +799,10 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     }
 }
 
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B> {
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B>
+where
+    Check<{ Self::VALID }>: True,
+{
     const E: u32 = E;
     const M: u32 = M;
     const N: NanStyle = N;
