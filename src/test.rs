@@ -43,10 +43,12 @@ fn test_exp2() {
     (-1200..1200).for_each(|x| assert_eq!(crate::fast_exp2(x), f64::from(x).exp2()));
 }
 
+struct BiasConstant<const N: i32>;
+
 #[allow(clippy::cast_sign_loss)]
 fn test_finite_bits_f8<const E: u32, const M: u32>(x: f32, bits: u8)
 where
-    [(); { (1 << (E - 1)) - 1 } as usize]:, /* Rust is baka! */
+    BiasConstant<{ (1 << (E - 1)) - 1 }>:,
 {
     assert_eq!(F8::<E, M>::from_f32(x).to_bits(), bits);
     assert_eq!(F8::<E, M, { FN }>::from_f32(x).to_bits(), bits);
