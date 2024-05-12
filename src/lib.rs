@@ -539,6 +539,10 @@ impl<const E: u32, const M: u32> F16<E, M> {
     }
 }
 
+trait SameSized<T> {}
+
+impl<T, U> SameSized<T> for U where Check<{ mem::size_of::<T>() == mem::size_of::<Self>() }>: True {}
+
 /// Mutual transmutation
 ///
 /// This trait provides an interface of mutual raw transmutation.  The methods
@@ -547,12 +551,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
 ///
 /// In this crate, all [`F8`] types implement `Transmute<u8>`, and all [`F16`]
 /// types implement `Transmute<u16>`.
-pub trait Transmute<T>: Copy {
-    /// Assert the same size between `T` and `Self`
-    ///
-    /// Do not override this constant.
-    const _SAME_SIZE: () = assert!(mem::size_of::<T>() == mem::size_of::<Self>());
-
+pub trait Transmute<T>: Copy + SameSized<T> {
     /// Raw transmutation from `T`
     fn from_bits(v: T) -> Self {
         unsafe { mem::transmute_copy(&v) }
@@ -567,6 +566,7 @@ pub trait Transmute<T>: Copy {
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Transmute<u8> for F8<E, M, N, B>
 where
     Check<{ Self::VALID }>: True,
+    Self: SameSized<u8>,
 {
     fn from_bits(v: u8) -> Self {
         Self::from_bits(v)
@@ -580,6 +580,7 @@ where
 impl<const E: u32, const M: u32> Transmute<u16> for F16<E, M>
 where
     Check<{ Self::VALID }>: True,
+    Self: SameSized<u16>,
 {
     fn from_bits(v: u16) -> Self {
         Self::from_bits(v)
