@@ -70,7 +70,7 @@ pub enum NanStyle {
 /// * `M`: significand (mantissa) precision
 /// * `N`: NaN encoding style
 /// * `B`: exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct F8<
     const E: u32,
     const M: u32,
@@ -82,7 +82,7 @@ pub struct F8<
 ///
 /// * `E`: exponent width
 /// * `M`: significand (mantissa) precision
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
 /// [`F16<5, 10>`], IEEE binary16, half precision
