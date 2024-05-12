@@ -88,6 +88,12 @@ pub struct F8<
 ///
 /// * `E`: exponent width
 /// * `M`: significand (mantissa) precision
+///
+/// Constraints:
+/// * `E` + `M` < 16 (there is always a sign bit)
+/// * `E` + `M` ≥ 8 (otherwise use [`F8`] instead)
+/// * `E` > 0 (or use an integer type instead)
+/// * `M` > 0 (∞ ≠ NaN)
 #[derive(Debug, Clone, Copy, Default)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
@@ -328,6 +334,9 @@ impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
 }
 
 impl<const E: u32, const M: u32> F16<E, M> {
+    /// Check if the parameters are valid
+    const VALID: bool = E + M < 16 && E + M >= 8 && E > 0 && M > 0;
+
     /// The radix of the internal representation
     pub const RADIX: u32 = 2;
 
@@ -384,7 +393,10 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     /// Raw transmutation from `u16`
     #[must_use]
-    pub const fn from_bits(v: u16) -> Self {
+    pub const fn from_bits(v: u16) -> Self
+    where
+        Check<{ Self::VALID }>: True,
+    {
         let mask = if E + M >= 15 {
             0xFFFF
         } else {
@@ -401,19 +413,28 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     /// Check if the value is NaN
     #[must_use]
-    pub const fn is_nan(self) -> bool {
+    pub const fn is_nan(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         self.0 & Self::ABS_MASK > Self::INFINITY.0
     }
 
     /// Check if the value is positive or negative infinity
     #[must_use]
-    pub const fn is_infinite(self) -> bool {
+    pub const fn is_infinite(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         self.0 & Self::ABS_MASK == Self::INFINITY.0
     }
 
     /// Check if the value is finite, i.e. neither infinite nor NaN
     #[must_use]
-    pub const fn is_finite(self) -> bool {
+    pub const fn is_finite(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         self.0 & Self::ABS_MASK < Self::INFINITY.0
     }
 
@@ -421,7 +442,10 @@ impl<const E: u32, const M: u32> F16<E, M> {
     ///
     /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
-    pub const fn is_subnormal(self) -> bool {
+    pub const fn is_subnormal(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         matches!(self.classify(), FpCategory::Subnormal)
     }
 
@@ -429,7 +453,10 @@ impl<const E: u32, const M: u32> F16<E, M> {
     ///
     /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
-    pub const fn is_normal(self) -> bool {
+    pub const fn is_normal(self) -> bool
+    where
+        Check<{ Self::VALID }>: True,
+    {
         matches!(self.classify(), FpCategory::Normal)
     }
 
@@ -438,7 +465,10 @@ impl<const E: u32, const M: u32> F16<E, M> {
     /// If only one property is going to be tested, it is generally faster to
     /// use the specific predicate instead.
     #[must_use]
-    pub const fn classify(self) -> FpCategory {
+    pub const fn classify(self) -> FpCategory
+    where
+        Check<{ Self::VALID }>: True,
+    {
         let exp_mask = ((1 << E) - 1) << M;
         let man_mask = (1 << M) - 1;
 
@@ -517,7 +547,10 @@ where
     }
 }
 
-impl<const E: u32, const M: u32> Transmute<u16> for F16<E, M> {
+impl<const E: u32, const M: u32> Transmute<u16> for F16<E, M>
+where
+    Check<{ Self::VALID }>: True,
+{
     fn from_bits(v: u16) -> Self {
         Self::from_bits(v)
     }
@@ -537,7 +570,10 @@ where
     }
 }
 
-impl<const E: u32, const M: u32> PartialEq for F16<E, M> {
+impl<const E: u32, const M: u32> PartialEq for F16<E, M>
+where
+    Check<{ Self::VALID }>: True,
+{
     fn eq(&self, other: &Self) -> bool {
         let eq = self.0 == other.0 && !self.is_nan();
         eq || (self.0 | other.0) & Self::ABS_MASK == 0
@@ -572,7 +608,10 @@ where
     impl_partial_cmp!();
 }
 
-impl<const E: u32, const M: u32> PartialOrd for F16<E, M> {
+impl<const E: u32, const M: u32> PartialOrd for F16<E, M>
+where
+    Check<{ Self::VALID }>: True,
+{
     impl_partial_cmp!();
 }
 
@@ -835,7 +874,10 @@ where
     }
 }
 
-impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
+impl<const E: u32, const M: u32> Minifloat for F16<E, M>
+where
+    Check<{ Self::VALID }>: True,
+{
     const E: u32 = E;
     const M: u32 = M;
 
@@ -969,6 +1011,7 @@ where
 
 impl<const E: u32, const M: u32> From<F16<E, M>> for f32
 where
+    Check<{ F16::<E, M>::VALID }>: True,
     Check<{ F16::<E, M>::MAX_EXP <= Self::MAX_EXP }>: True,
     Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
 {
@@ -978,6 +1021,7 @@ where
 //TODO: make this independent of `f32`
 impl<const E: u32, const M: u32> From<F16<E, M>> for f64
 where
+    Check<{ F16::<E, M>::VALID }>: True,
     Check<{ F16::<E, M>::MAX_EXP <= f32::MAX_EXP }>: True,
     Check<{ F16::<E, M>::MIN_EXP >= f32::MIN_EXP }>: True,
 {
