@@ -71,7 +71,7 @@ pub enum NanStyle {
 /// * `M`: significand (mantissa) precision
 /// * `N`: NaN encoding style
 /// * `B`: exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
-/// 
+///
 /// Constraints:
 /// * `E` + `M` < 8 (there is always a sign bit)
 /// * `E` > 0 (or use an integer type instead)
@@ -527,60 +527,6 @@ impl<const E: u32, const M: u32> Transmute<u16> for F16<E, M> {
     }
 }
 
-macro_rules! define_into_f32 {
-    ($name:ident, $f:ty) => {
-        fn $name(x: $f) -> f32 {
-            let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
-            let magnitude = x.0 & <$f>::ABS_MASK;
-
-            if x.is_nan() {
-                return f32::NAN * sign;
-            }
-            if x.is_infinite() {
-                return f32::INFINITY * sign;
-            }
-            if magnitude < 1 << M {
-                #[allow(clippy::cast_possible_wrap)]
-                let shift = <$f>::MIN_EXP - <$f>::MANTISSA_DIGITS as i32;
-                #[allow(clippy::cast_possible_truncation)]
-                return (fast_exp2(shift) * f64::from(sign) * f64::from(magnitude)) as f32;
-            }
-            let shift = f32::MANTISSA_DIGITS - <$f>::MANTISSA_DIGITS;
-            #[allow(clippy::cast_sign_loss)]
-            let diff = (<$f>::MIN_EXP - f32::MIN_EXP) as u32;
-            let diff = diff << (f32::MANTISSA_DIGITS - 1);
-            let sign = u32::from(x.is_sign_negative()) << 31;
-            f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
-        }
-    };
-}
-
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f32
-where
-    Check<{ F8::<E, M, N, B>::VALID }>: True,
-{
-    define_into_f32!(from, F8<E, M, N, B>);
-}
-
-impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64
-where
-    Check<{ F8::<E, M, N, B>::VALID }>: True,
-{
-    fn from(x: F8<E, M, N, B>) -> Self {
-        f32::from(x).into()
-    }
-}
-
-impl<const E: u32, const M: u32> From<F16<E, M>> for f32 {
-    define_into_f32!(from, F16<E, M>);
-}
-
-impl<const E: u32, const M: u32> From<F16<E, M>> for f64 {
-    fn from(x: F16<E, M>) -> Self {
-        f32::from(x).into()
-    }
-}
-
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialEq for F8<E, M, N, B>
 where
     Check<{ Self::VALID }>: True,
@@ -969,5 +915,73 @@ impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
 
     fn total_cmp(&self, other: &Self) -> Ordering {
         Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
+    }
+}
+
+macro_rules! define_into_f32 {
+    ($name:ident, $f:ty) => {
+        fn $name(x: $f) -> f32 {
+            let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
+            let magnitude = x.0 & <$f>::ABS_MASK;
+
+            if x.is_nan() {
+                return f32::NAN * sign;
+            }
+            if x.is_infinite() {
+                return f32::INFINITY * sign;
+            }
+            if magnitude < 1 << M {
+                #[allow(clippy::cast_possible_wrap)]
+                let shift = <$f>::MIN_EXP - <$f>::MANTISSA_DIGITS as i32;
+                #[allow(clippy::cast_possible_truncation)]
+                return (fast_exp2(shift) * f64::from(sign) * f64::from(magnitude)) as f32;
+            }
+            let shift = f32::MANTISSA_DIGITS - <$f>::MANTISSA_DIGITS;
+            #[allow(clippy::cast_sign_loss)]
+            let diff = (<$f>::MIN_EXP - f32::MIN_EXP) as u32;
+            let diff = diff << (f32::MANTISSA_DIGITS - 1);
+            let sign = u32::from(x.is_sign_negative()) << 31;
+            f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
+        }
+    };
+}
+
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f32
+where
+    Check<{ F8::<E, M, N, B>::VALID }>: True,
+    Check<{ F8::<E, M, N, B>::MAX_EXP <= Self::MAX_EXP }>: True,
+    Check<{ F8::<E, M, N, B>::MIN_EXP >= Self::MIN_EXP }>: True,
+{
+    define_into_f32!(from, F8<E, M, N, B>);
+}
+
+//TODO: make this independent of `f32`
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> From<F8<E, M, N, B>> for f64
+where
+    Check<{ F8::<E, M, N, B>::VALID }>: True,
+    Check<{ F8::<E, M, N, B>::MAX_EXP <= f32::MAX_EXP }>: True,
+    Check<{ F8::<E, M, N, B>::MIN_EXP >= f32::MIN_EXP }>: True,
+{
+    fn from(x: F8<E, M, N, B>) -> Self {
+        f32::from(x).into()
+    }
+}
+
+impl<const E: u32, const M: u32> From<F16<E, M>> for f32
+where
+    Check<{ F16::<E, M>::MAX_EXP <= Self::MAX_EXP }>: True,
+    Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
+{
+    define_into_f32!(from, F16<E, M>);
+}
+
+//TODO: make this independent of `f32`
+impl<const E: u32, const M: u32> From<F16<E, M>> for f64
+where
+    Check<{ F16::<E, M>::MAX_EXP <= f32::MAX_EXP }>: True,
+    Check<{ F16::<E, M>::MIN_EXP >= f32::MIN_EXP }>: True,
+{
+    fn from(x: F16<E, M>) -> Self {
+        f32::from(x).into()
     }
 }
