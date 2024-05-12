@@ -338,7 +338,8 @@ impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
 
 impl<const E: u32, const M: u32> F16<E, M> {
     /// Check if the parameters are valid
-    const VALID: bool = E + M < 16 && E + M >= 8 && E > 0 && M > 0;
+    const VALID: bool =
+        E + M < 16 && E + M >= 8 && E > 0 && M > 0 && Self::MAX_EXP >= 0 && Self::MIN_EXP <= 0;
 
     /// The radix of the internal representation
     pub const RADIX: u32 = 2;
