@@ -160,7 +160,7 @@ where
 }
 
 #[test]
-fn equality() {
+fn test_equality() {
     for_each_type!(test_equality_f8, test_equality_f16);
 }
 
@@ -193,7 +193,7 @@ where
 }
 
 #[test]
-fn comparison() {
+fn test_comparison() {
     for_each_type!(test_comparison_f8, test_comparison_f16);
 }
 
@@ -218,7 +218,7 @@ where
 }
 
 #[test]
-fn neg() {
+fn test_neg() {
     for_each_type!(test_neg_f8, test_neg_f16);
 }
 
@@ -251,6 +251,6 @@ where
 }
 
 #[test]
-fn identity_conversion() {
+fn test_identity_conversion() {
     for_each_type!(test_identity_conversion_f8, test_identity_conversion_f16);
 }
