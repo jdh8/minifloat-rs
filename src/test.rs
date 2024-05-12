@@ -86,6 +86,35 @@ fn test_finite_bits() {
     );
 }
 
+fn test_epsilon_f8<T: Minifloat + Transmute<u8> + Debug>()
+where
+    f32: From<T>,
+{
+    let bits = T::from_f32(1.0).to_bits();
+    let next_up = T::from_bits(bits + 1);
+    let next_down = T::from_bits(bits - 1);
+
+    assert_eq!(f32::from(next_up) - 1.0, T::EPSILON.into());
+    assert_eq!(2.0 * (1.0 - f32::from(next_down)), T::EPSILON.into());
+}
+
+fn test_epsilon_f16<T: Minifloat + Transmute<u16> + Debug>()
+where
+    f32: From<T>,
+{
+    let bits = T::from_f32(1.0).to_bits();
+    let next_up = T::from_bits(bits + 1);
+    let next_down = T::from_bits(bits - 1);
+
+    assert_eq!(f32::from(next_up) - 1.0, T::EPSILON.into());
+    assert_eq!(2.0 * (1.0 - f32::from(next_down)), T::EPSILON.into());
+}
+
+#[test]
+fn test_epsilon() {
+    for_each_type!(test_epsilon_f8, test_epsilon_f16);
+}
+
 fn test_equality_f8<T: Minifloat + Transmute<u8> + Debug>()
 where
     f32: From<T>,

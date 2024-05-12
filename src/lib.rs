@@ -194,12 +194,24 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
 
     /// The smallest positive normal number
     ///
-    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
+    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>.
     pub const MIN_POSITIVE: Self = Self(1 << M);
+
+    /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
+    ///
+    /// The difference between 1.0 and the next larger representable number.
+    ///
+    /// Equal to 2<sup>&minus;`M`</sup>.
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EPSILON: Self = Self(match B - M as i32 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        s@1.. => (s as u8) << M,
+        s => 1 << (M as i32 - 1 + s),
+    });
 
     /// The minimum finite number
     ///
-    /// Equal to &minus;[`MAX`][Self::MAX]
+    /// Equal to &minus;[`MAX`][Self::MAX].
     pub const MIN: Self = Self(Self::MAX.0 | 1 << (E + M));
 
     /// Magnitude mask for internal usage
@@ -378,7 +390,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     /// The maximum finite number
     ///
-    /// Equal to (1 &minus; 2<sup>&minus;[`MANTISSA_DIGITS`][Self::MANTISSA_DIGITS]</sup>) 2<sup>[`MAX_EXP`][Self::MAX_EXP]</sup>
+    /// Equal to (1 &minus; 2<sup>&minus;[`MANTISSA_DIGITS`][Self::MANTISSA_DIGITS]</sup>) 2<sup>[`MAX_EXP`][Self::MAX_EXP]</sup>.
     pub const MAX: Self = Self(Self::INFINITY.0 - 1);
 
     /// The smallest positive (subnormal) number
@@ -386,8 +398,20 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     /// The smallest positive normal number
     ///
-    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
+    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>.
     pub const MIN_POSITIVE: Self = Self(1 << M);
+
+    /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
+    ///
+    /// The difference between 1.0 and the next larger representable number.
+    ///
+    /// Equal to 2<sup>&minus;`M`</sup>.
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EPSILON: Self = Self(match (1 << (E - 1)) - 1 - M as i32 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        s@1.. => (s as u16) << M,
+        s => 1 << (M as i32 - 1 + s),
+    });
 
     /// The minimum finite number
     ///
@@ -724,6 +748,13 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
     const MIN_POSITIVE: Self;
 
+    /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
+    ///
+    /// The difference between 1.0 and the next larger representable number.
+    ///
+    /// Equal to 2<sup>&minus;`M`</sup>.
+    const EPSILON: Self;
+
     /// The minimum finite number
     ///
     /// Equal to &minus;[`MAX`][Self::MAX]
@@ -861,6 +892,7 @@ where
     const MAX: Self = Self::MAX;
     const TINY: Self = Self::TINY;
     const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+    const EPSILON: Self = Self::EPSILON;
     const MIN: Self = Self::MIN;
 
     #[allow(clippy::cast_possible_wrap)]
@@ -953,6 +985,7 @@ where
     const MAX: Self = Self::MAX;
     const TINY: Self = Self::TINY;
     const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+    const EPSILON: Self = Self::EPSILON;
     const MIN: Self = Self::MIN;
 
     #[allow(clippy::cast_possible_wrap)]
