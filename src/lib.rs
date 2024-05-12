@@ -205,7 +205,7 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     #[allow(clippy::cast_possible_wrap)]
     pub const EPSILON: Self = Self(match B - M as i32 {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        s@1.. => (s as u8) << M,
+        s @ 1.. => (s as u8) << M,
         s => 1 << (M as i32 - 1 + s),
     });
 
@@ -409,7 +409,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
     #[allow(clippy::cast_possible_wrap)]
     pub const EPSILON: Self = Self(match (1 << (E - 1)) - 1 - M as i32 {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        s@1.. => (s as u16) << M,
+        s @ 1.. => (s as u16) << M,
         s => 1 << (M as i32 - 1 + s),
     });
 
