@@ -30,6 +30,10 @@ macro_rules! for_each_type {
         $f16::<crate::f16>();
         $f16::<crate::bf16>();
     };
+
+    ($f:ident) => {
+        for_each_type!($f, $f);
+    };
 }
 
 macro_rules! are_equivalent {
@@ -282,4 +286,45 @@ where
 #[test]
 fn test_huge() {
     for_each_type!(test_huge_f8, test_huge_f16);
+}
+
+fn test_10_exp_generic<T: Minifloat + Debug>()
+where
+    f64: From<T>,
+{
+    let assert_lt = |x: f64, y: f64, z: f64| {
+        assert!(
+            x < y,
+            "{}: {} < {} failed ({})",
+            core::any::type_name::<T>(),
+            x,
+            y,
+            z,
+        );
+    };
+    assert_lt(
+        libm::exp10(T::MAX_10_EXP.into()),
+        T::MAX.into(),
+        f64::exp2(T::MAX_EXP.into()),
+    );
+    assert_lt(
+        T::MAX.into(),
+        libm::exp10((T::MAX_10_EXP + 1).into()),
+        f64::exp2(T::MAX_EXP.into()),
+    );
+    assert_lt(
+        T::MIN_POSITIVE.into(),
+        libm::exp10(T::MIN_10_EXP.into()),
+        f64::exp2(T::MIN_EXP.into()),
+    );
+    assert_lt(
+        libm::exp10((T::MIN_10_EXP - 1).into()),
+        T::MIN_POSITIVE.into(),
+        f64::exp2(T::MIN_EXP.into()),
+    );
+}
+
+#[test]
+fn test_10_exp() {
+    for_each_type!(test_10_exp_generic, test_10_exp_generic);
 }
