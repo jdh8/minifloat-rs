@@ -254,3 +254,32 @@ where
 fn test_identity_conversion() {
     for_each_type!(test_identity_conversion_f8, test_identity_conversion_f16);
 }
+
+fn test_huge_f8<T: Minifloat + Transmute<u8> + Debug>()
+where
+    f32: From<T>,
+{
+    let huge = T::HUGE;
+    let nan = T::from_bits(huge.to_bits() + 1);
+    let big = T::from_bits(huge.to_bits() - 1);
+
+    assert!(huge > big);
+    assert!(nan.is_nan());
+}
+
+fn test_huge_f16<T: Minifloat + Transmute<u16> + Debug>()
+where
+    f32: From<T>,
+{
+    let huge = T::HUGE;
+    let nan = T::from_bits(huge.to_bits() + 1);
+    let big = T::from_bits(huge.to_bits() - 1);
+
+    assert!(huge > big);
+    assert!(nan.is_nan());
+}
+
+#[test]
+fn test_huge() {
+    for_each_type!(test_huge_f8, test_huge_f16);
+}
