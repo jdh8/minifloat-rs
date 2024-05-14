@@ -156,7 +156,13 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     /// The maximum exponent
     ///
     /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
-    pub const MAX_EXP: i32 = (1 << E) - B - matches!(N, NanStyle::IEEE) as i32;
+    pub const MAX_EXP: i32 = (1 << E)
+        - B
+        - match N {
+            NanStyle::IEEE => 1,
+            NanStyle::FN => (M == 0) as i32,
+            NanStyle::FNUZ => 0,
+        };
 
     /// One greater than the minimum normal exponent
     ///
@@ -664,6 +670,26 @@ impl<const E: u32, const M: u32> Neg for F16<E, M> {
     }
 }
 
+#[allow(clippy::excessive_precision)]
+const LOG2_SIGNIFICAND: [f64; 16] = [
+    -2.0,
+    -1.0,
+    -4.150_374_992_788_438_13e-1,
+    -1.926_450_779_423_958_81e-1,
+    -9.310_940_439_148_146_51e-2,
+    -4.580_368_961_312_478_86e-2,
+    -2.272_007_650_008_352_89e-2,
+    -1.131_531_322_783_414_61e-2,
+    -5.646_563_141_142_062_72e-3,
+    -2.820_519_062_378_662_63e-3,
+    -1.409_570_254_671_353_63e-3,
+    -7.046_129_765_893_727_06e-4,
+    -3.522_634_716_290_213_85e-4,
+    -1.761_209_842_740_240_62e-4,
+    -8.805_780_458_002_638_34e-5,
+    -4.402_823_044_177_721_15e-5,
+];
+
 /// Generic trait for minifloat types
 ///
 /// We are **not** going to implement [`num_traits::Float`][flt] because:
@@ -698,7 +724,13 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// The maximum exponent
     ///
     /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
-    const MAX_EXP: i32 = (1 << Self::E) - Self::B - matches!(Self::N, NanStyle::IEEE) as i32;
+    const MAX_EXP: i32 = (1 << Self::E)
+        - Self::B
+        - match Self::N {
+            NanStyle::IEEE => 1,
+            NanStyle::FN => (Self::M == 0) as i32,
+            NanStyle::FNUZ => 0,
+        };
 
     /// One greater than the minimum normal exponent
     ///
@@ -720,7 +752,12 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     ///
     /// Equal to floor(log<sub>10</sub>([`MAX`][Self::MAX]))
     #[allow(clippy::cast_possible_truncation)]
-    const MAX_10_EXP: i32 = (Self::MAX_EXP as f64 * LOG10_2) as i32;
+    const MAX_10_EXP: i32 = {
+        let exponent = (1 << Self::E) - Self::B - matches!(Self::N, NanStyle::IEEE) as i32;
+        let precision = Self::M + !matches!(Self::N, NanStyle::FN) as u32;
+        let log2_max = exponent as f64 + LOG2_SIGNIFICAND[precision as usize];
+        (log2_max * LOG10_2) as i32
+    };
 
     /// Minimum <var>x</var> such that 10<sup>`x`</sup> is normal
     ///

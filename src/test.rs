@@ -292,36 +292,13 @@ fn test_10_exp_generic<T: Minifloat + Debug>()
 where
     f64: From<T>,
 {
-    let assert_lt = |x: f64, y: f64, z: f64| {
-        assert!(
-            x < y,
-            "{}: {} < {} failed ({})",
-            core::any::type_name::<T>(),
-            x,
-            y,
-            z,
-        );
-    };
-    assert_lt(
-        libm::exp10(T::MAX_10_EXP.into()),
-        T::MAX.into(),
-        f64::exp2(T::MAX_EXP.into()),
-    );
-    assert_lt(
-        T::MAX.into(),
-        libm::exp10((T::MAX_10_EXP + 1).into()),
-        f64::exp2(T::MAX_EXP.into()),
-    );
-    assert_lt(
-        T::MIN_POSITIVE.into(),
-        libm::exp10(T::MIN_10_EXP.into()),
-        f64::exp2(T::MIN_EXP.into()),
-    );
-    assert_lt(
-        libm::exp10((T::MIN_10_EXP - 1).into()),
-        T::MIN_POSITIVE.into(),
-        f64::exp2(T::MIN_EXP.into()),
-    );
+    fn exp10i(x: i32) -> f64 {
+        libm::exp10(x.into())
+    }
+    assert!(exp10i(T::MAX_10_EXP) <= T::MAX.into());
+    assert!(exp10i(T::MAX_10_EXP + 1) > T::MAX.into());
+    assert!(exp10i(T::MIN_10_EXP) >= T::MIN_POSITIVE.into());
+    assert!(exp10i(T::MIN_10_EXP - 1) < T::MIN_POSITIVE.into());
 }
 
 #[test]
