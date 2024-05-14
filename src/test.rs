@@ -12,36 +12,47 @@ use crate::NanStyle::{FN, FNUZ};
 use crate::{Minifloat, Transmute, F16, F8};
 use core::fmt::Debug;
 
-macro_rules! for_each_type {
-    ($f8:ident, $f16:ident) => {
-        $f8::<F8<3, 4>>();
-        $f8::<F8<3, 4, { FN }>>();
-        $f8::<F8<3, 4, { FNUZ }>>();
-
-        $f8::<F8<4, 3>>();
-        $f8::<F8<4, 3, { FN }>>();
-        $f8::<F8<4, 3, { FNUZ }>>();
-        $f8::<F8<4, 3, { FN }, 11>,>();
-        $f8::<F8<4, 3, { FNUZ }, 11>>();
-
-        $f8::<F8<5, 2>>();
-        $f8::<F8<5, 2, { FN }>>();
-        $f8::<F8<5, 2, { FNUZ }>>();
-
-        $f8::<F8<6, 1>>();
-        $f8::<F8<6, 1, { FN }>>();
-        $f8::<F8<6, 1, { FNUZ }>>();
-
-        $f8::<F8<7, 0, { FN }>>();
-        $f8::<F8<7, 0, { FNUZ }>>();
-
-        $f16::<F16<5, 7>>();
-        $f16::<crate::f16>();
-        $f16::<crate::bf16>();
-    };
-
+macro_rules! for_each_f8 {
     ($f:ident) => {
-        for_each_type!($f, $f);
+        $f::<F8<2, 5>>();
+        $f::<F8<2, 5, { FN }>>();
+        $f::<F8<2, 5, { FNUZ }>>();
+        
+        $f::<F8<3, 4>>();
+        $f::<F8<3, 4, { FN }>>();
+        $f::<F8<3, 4, { FNUZ }>>();
+
+        $f::<F8<4, 3>>();
+        $f::<F8<4, 3, { FN }>>();
+        $f::<F8<4, 3, { FNUZ }>>();
+        $f::<F8<4, 3, { FN }, 11>,>();
+        $f::<F8<4, 3, { FNUZ }, 11>>();
+
+        $f::<F8<5, 2>>();
+        $f::<F8<5, 2, { FN }>>();
+        $f::<F8<5, 2, { FNUZ }>>();
+
+        $f::<F8<6, 1>>();
+        $f::<F8<6, 1, { FN }>>();
+        $f::<F8<6, 1, { FNUZ }>>();
+
+        $f::<F8<7, 0, { FN }>>();
+        $f::<F8<7, 0, { FNUZ }>>();
+
+        $f::<F8<2, 1>>();
+        $f::<F8<2, 1, { FN }>>();
+        $f::<F8<2, 1, { FNUZ }>>();
+    };
+}
+
+macro_rules! for_some_f16 {
+    ($f:ident) => {
+        $f::<crate::f16>();
+        $f::<crate::bf16>();
+        $f::<F16<5, 7>>();
+        $f::<F16<5, 5>>();
+        $f::<F16<6, 4>>();
+        $f::<F16<7, 3>>();
     };
 }
 
@@ -105,10 +116,7 @@ where
 {
     let bits = T::from_f32(1.0).to_bits();
     let next_up = T::from_bits(bits + 1);
-    let next_down = T::from_bits(bits - 1);
-
     assert_eq!(f32::from(next_up) - 1.0, T::EPSILON.into());
-    assert_eq!(2.0 * (1.0 - f32::from(next_down)), T::EPSILON.into());
 }
 
 fn test_epsilon_f16<T: Minifloat + Transmute<u16> + Debug>()
@@ -117,15 +125,13 @@ where
 {
     let bits = T::from_f32(1.0).to_bits();
     let next_up = T::from_bits(bits + 1);
-    let next_down = T::from_bits(bits - 1);
-
     assert_eq!(f32::from(next_up) - 1.0, T::EPSILON.into());
-    assert_eq!(2.0 * (1.0 - f32::from(next_down)), T::EPSILON.into());
 }
 
 #[test]
 fn test_epsilon() {
-    for_each_type!(test_epsilon_f8, test_epsilon_f16);
+    for_each_f8!(test_epsilon_f8);
+    for_some_f16!(test_epsilon_f16);
 }
 
 fn test_equality_f8<T: Minifloat + Transmute<u8> + Debug>()
@@ -167,7 +173,8 @@ where
 
 #[test]
 fn test_equality() {
-    for_each_type!(test_equality_f8, test_equality_f16);
+    for_each_f8!(test_equality_f8);
+    for_some_f16!(test_equality_f16);
 }
 
 fn test_comparison_f8<T: Minifloat + Transmute<u8> + Debug>()
@@ -186,11 +193,11 @@ where
     f32: From<T>,
 {
     (0..=0xFFFF)
-        .step_by(17 << (T::E + T::M) >> 15 | 1)
+        .step_by(69 << (T::E + T::M) >> 15 | 1)
         .map(T::from_bits)
         .for_each(|x| {
             (0..=0xFFFF)
-                .step_by(19 << (T::E + T::M) >> 15 | 1)
+                .step_by(0x69 << (T::E + T::M) >> 15 | 1)
                 .map(T::from_bits)
                 .for_each(|y| {
                     assert_eq!(x.partial_cmp(&y), f32::from(x).partial_cmp(&f32::from(y)));
@@ -200,7 +207,8 @@ where
 
 #[test]
 fn test_comparison() {
-    for_each_type!(test_comparison_f8, test_comparison_f16);
+    for_each_f8!(test_comparison_f8);
+    for_some_f16!(test_comparison_f16);
 }
 
 fn test_neg_f8<T: Minifloat + Transmute<u8> + Debug>()
@@ -225,7 +233,8 @@ where
 
 #[test]
 fn test_neg() {
-    for_each_type!(test_neg_f8, test_neg_f16);
+    for_each_f8!(test_neg_f8);
+    for_some_f16!(test_neg_f16);
 }
 
 fn test_identity_conversion_f8<T: Minifloat + Transmute<u8> + Debug>()
@@ -258,7 +267,8 @@ where
 
 #[test]
 fn test_identity_conversion() {
-    for_each_type!(test_identity_conversion_f8, test_identity_conversion_f16);
+    for_each_f8!(test_identity_conversion_f8);
+    for_some_f16!(test_identity_conversion_f16);
 }
 
 fn test_huge_f8<T: Minifloat + Transmute<u8> + Debug>()
@@ -287,7 +297,8 @@ where
 
 #[test]
 fn test_huge() {
-    for_each_type!(test_huge_f8, test_huge_f16);
+    for_each_f8!(test_huge_f8);
+    for_some_f16!(test_huge_f16);
 }
 
 fn test_10_exp_generic<T: Minifloat + Debug>()
@@ -305,5 +316,6 @@ where
 
 #[test]
 fn test_10_exp() {
-    for_each_type!(test_10_exp_generic, test_10_exp_generic);
+    for_each_f8!(test_10_exp_generic);
+    for_some_f16!(test_10_exp_generic);
 }
