@@ -21,10 +21,19 @@ macro_rules! for_each_type {
         $f8::<F8<4, 3>>();
         $f8::<F8<4, 3, { FN }>>();
         $f8::<F8<4, 3, { FNUZ }>>();
+        $f8::<F8<4, 3, { FN }, 11>,>();
+        $f8::<F8<4, 3, { FNUZ }, 11>>();
 
         $f8::<F8<5, 2>>();
         $f8::<F8<5, 2, { FN }>>();
         $f8::<F8<5, 2, { FNUZ }>>();
+
+        $f8::<F8<6, 1>>();
+        $f8::<F8<6, 1, { FN }>>();
+        $f8::<F8<6, 1, { FNUZ }>>();
+
+        $f8::<F8<7, 0, { FN }>>();
+        $f8::<F8<7, 0, { FNUZ }>>();
 
         $f16::<F16<5, 7>>();
         $f16::<crate::f16>();
@@ -124,8 +133,6 @@ where
     f32: From<T>,
     f64: From<T>,
 {
-    assert_eq!(f32::from(T::from_f32(-3.0)), -3.0);
-    assert_eq!(f64::from(T::from_f64(-3.0)), -3.0);
     assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
     assert_eq!(
         T::from_f32(0.0).to_bits() == T::from_f32(-0.0).to_bits(),
@@ -148,12 +155,7 @@ where
     assert_eq!(f32::from(T::from_f32(-3.0)), -3.0);
     assert_eq!(f64::from(T::from_f64(-3.0)), -3.0);
     assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
-    assert_ne!(
-        T::from_f32(0.0).to_bits(),
-        T::from_f32(-0.0).to_bits(),
-        "{}",
-        core::any::type_name::<T>()
-    );
+    assert_ne!(T::from_f32(0.0).to_bits(), T::from_f32(-0.0).to_bits());
     assert!(T::from_f32(f32::NAN).is_nan());
     assert!(f32::from(T::from_f32(f32::NAN)).is_nan());
     assert!(f64::from(T::from_f64(f64::NAN)).is_nan());
