@@ -301,6 +301,26 @@ fn test_huge() {
     for_some_f16!(test_huge_f16);
 }
 
+fn test_radix_exp_generic<T: Minifloat + Debug>()
+where
+    f64: From<T>,
+    crate::Check<{ T::RADIX == 2 }>: crate::True,
+{
+    fn exp2i(x: i32) -> f64 {
+        f64::exp2(x.into())
+    }
+    assert!(exp2i(T::MAX_EXP) > T::MAX.into());
+    assert!(exp2i(T::MAX_EXP - 1) <= T::MAX.into());
+    assert!(exp2i(T::MIN_EXP - 1) <= T::MIN_POSITIVE.into());
+    assert!(exp2i(T::MIN_EXP) > T::MIN_POSITIVE.into());
+}
+
+#[test]
+fn test_radix_exp() {
+    for_each_f8!(test_radix_exp_generic);
+    for_some_f16!(test_radix_exp_generic);
+}
+
 fn test_10_exp_generic<T: Minifloat + Debug>()
 where
     f64: From<T>,

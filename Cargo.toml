@@ -1,6 +1,6 @@
 [package]
 name = "minifloat"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Chen-Pang He (https://jdh8.org)"]
 edition = "2021"
 description = "Emulate various minifloats with const generics"

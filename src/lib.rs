@@ -95,6 +95,7 @@ pub struct F8<
 /// * `E` + `M` ≥ 8 (otherwise use [`F8`] instead)
 /// * `E` > 0 (or use an integer type instead)
 /// * `M` > 0 (∞ ≠ NaN)
+/// * 1.0 is normal
 #[derive(Debug, Clone, Copy, Default)]
 pub struct F16<const E: u32, const M: u32>(u16);
 
