@@ -234,12 +234,8 @@ impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B>
     where
         Check<{ Self::VALID }>: True,
     {
-        let mask = if E + M >= 7 {
-            0xFF
-        } else {
-            (1 << (E + M + 1)) - 1
-        };
-        Self(v & mask)
+        let mask: u16 = (1 << (E + M + 1)) - 1;
+        Self((mask & 0xFF) as u8 & v)
     }
 
     /// Raw transmutation to `u8`
