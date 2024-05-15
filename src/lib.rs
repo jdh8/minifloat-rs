@@ -33,6 +33,7 @@ use core::marker::ConstParamTy;
 use core::mem;
 use core::num::FpCategory;
 use core::ops::Neg;
+use num_traits::AsPrimitive;
 
 /// NaN encoding style
 ///
@@ -1204,4 +1205,14 @@ where
     Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
 {
     define_f64_from!(from, F16<E, M>);
+}
+
+impl<T: 'static + Copy, const E: u32, const M: u32, const N: NanStyle, const B: i32> AsPrimitive<T>
+    for F8<E, M, N, B>
+where
+    f64: From<Self> + AsPrimitive<T>,
+{
+    fn as_(self) -> T {
+        f64::from(self).as_()
+    }
 }

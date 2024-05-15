@@ -11,3 +11,6 @@ keywords = ["minifloat", "f16", "bfloat16", "const-generics"]
 
 [dev-dependencies]
 libm = "0.2.8"
+
+[dependencies]
+num-traits = "0.2.19"
