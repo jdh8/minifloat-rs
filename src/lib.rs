@@ -1207,6 +1207,7 @@ where
     define_f64_from!(from, F16<E, M>);
 }
 
+/// Possibly lossy conversion (via [`f64`])
 impl<T: 'static + Copy, const E: u32, const M: u32, const N: NanStyle, const B: i32> AsPrimitive<T>
     for F8<E, M, N, B>
 where
@@ -1217,6 +1218,7 @@ where
     }
 }
 
+/// Possibly lossy conversion (via [`f64`])
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> ToPrimitive for F8<E, M, N, B>
 where
     f64: From<Self>,
