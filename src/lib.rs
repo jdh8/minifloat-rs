@@ -33,7 +33,7 @@ use core::marker::ConstParamTy;
 use core::mem;
 use core::num::FpCategory;
 use core::ops::Neg;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, ToPrimitive};
 
 /// NaN encoding style
 ///
@@ -1214,5 +1214,34 @@ where
 {
     fn as_(self) -> T {
         f64::from(self).as_()
+    }
+}
+
+impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> ToPrimitive for F8<E, M, N, B>
+where
+    f64: From<Self>,
+{
+    fn to_i64(&self) -> Option<i64> {
+        f64::from(*self).to_i64()
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        f64::from(*self).to_u64()
+    }
+
+    fn to_i128(&self) -> Option<i128> {
+        f64::from(*self).to_i128()
+    }
+
+    fn to_u128(&self) -> Option<u128> {
+        f64::from(*self).to_u128()
+    }
+
+    fn to_f32(&self) -> Option<f32> {
+        f64::from(*self).to_f32()
+    }
+
+    fn to_f64(&self) -> Option<f64> {
+        Some(f64::from(*self))
     }
 }
