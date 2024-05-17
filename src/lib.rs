@@ -20,10 +20,8 @@
 //! Note that there is always a sign bit, so [`F8<4, 3>`] already uses up all
 //! 8 bits: 1 sign bit, 4 exponent bits, and 3 significand bits.
 
-#![feature(adt_const_params)]
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-#![allow(private_bounds)]
+#![feature(adt_const_params, generic_const_exprs)]
+#![allow(incomplete_features, private_bounds)]
 #![warn(missing_docs)]
 
 mod test;
