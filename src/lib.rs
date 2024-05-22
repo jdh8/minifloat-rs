@@ -1307,3 +1307,33 @@ where
         as_f64(self).as_()
     }
 }
+
+/// Possibly lossy conversion (via [`f64`])
+impl<const E: u32, const M: u32> ToPrimitive for F16<E, M>
+where
+    Self: Minifloat + Transmute<u16>,
+{
+    fn to_i64(&self) -> Option<i64> {
+        as_f64(*self).to_i64()
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        as_f64(*self).to_u64()
+    }
+
+    fn to_i128(&self) -> Option<i128> {
+        as_f64(*self).to_i128()
+    }
+
+    fn to_u128(&self) -> Option<u128> {
+        as_f64(*self).to_u128()
+    }
+
+    fn to_f32(&self) -> Option<f32> {
+        as_f64(*self).to_f32()
+    }
+
+    fn to_f64(&self) -> Option<f64> {
+        Some(as_f64(*self))
+    }
+}
