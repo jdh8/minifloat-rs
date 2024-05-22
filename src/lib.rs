@@ -542,6 +542,12 @@ impl<const E: u32, const M: u32> F16<E, M> {
         let mask = ((x & sign) >> (E + M)) * (sign - 1);
         x ^ (sign | mask)
     }
+
+    /// Compute the absolute value
+    #[must_use]
+    pub const fn abs(self) -> Self {
+        Self(self.0 & Self::ABS_MASK)
+    }
 }
 
 trait SameSized<T> {}
@@ -913,6 +919,16 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
             core::cmp::min_by(self, other, Self::total_cmp)
         }
     }
+
+    /// Compute the absolute value
+    #[must_use]
+    fn abs(self) -> Self {
+        if self.is_sign_negative() {
+            -self
+        } else {
+            self
+        }
+    }
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Minifloat for F8<E, M, N, B>
@@ -1099,6 +1115,10 @@ where
     fn total_cmp(&self, other: &Self) -> Ordering {
         Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
     }
+
+    fn abs(self) -> Self {
+        self.abs()
+    }
 }
 
 macro_rules! define_f32_from {
@@ -1168,8 +1188,7 @@ macro_rules! define_f64_from {
             if magnitude < 1 << M {
                 #[allow(clippy::cast_possible_wrap)]
                 let shift = <$f>::MIN_EXP - <$f>::MANTISSA_DIGITS as i32;
-                #[allow(clippy::cast_possible_truncation)]
-                return (fast_exp2(shift) * sign * f64::from(magnitude)) as f64;
+                return fast_exp2(shift) * sign * f64::from(magnitude);
             }
             let shift = f64::MANTISSA_DIGITS - <$f>::MANTISSA_DIGITS;
             #[allow(clippy::cast_sign_loss)]
@@ -1243,5 +1262,48 @@ where
 
     fn to_f64(&self) -> Option<f64> {
         Some(f64::from(*self))
+    }
+}
+
+fn as_f64<T: Minifloat + Transmute<u16>>(x: T) -> f64 {
+    let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
+    let magnitude = x.abs().to_bits();
+
+    if x.is_nan() {
+        return f64::NAN.copysign(sign);
+    }
+    if x.is_infinite() {
+        return f64::INFINITY * sign;
+    }
+    if i32::from(magnitude) >= (f64::MAX_EXP + T::B) << T::M {
+        return f64::INFINITY * sign;
+    }
+    if magnitude < 1 << T::M {
+        #[allow(clippy::cast_possible_wrap)]
+        let shift = T::MIN_EXP - T::MANTISSA_DIGITS as i32;
+        return fast_exp2(shift) * sign * f64::from(magnitude);
+    }
+    if i32::from(magnitude >> T::M) < f64::MIN_EXP + T::B {
+        let significand = (magnitude & ((1 << T::M) - 1)) | 1 << T::M;
+        let exponent = i32::from(magnitude >> T::M) - T::B;
+        #[allow(clippy::cast_possible_wrap)]
+        return fast_exp2(exponent - T::M as i32) * sign * f64::from(significand);
+    }
+    let shift = f64::MANTISSA_DIGITS - T::MANTISSA_DIGITS;
+    #[allow(clippy::cast_sign_loss)]
+    let diff = (T::MIN_EXP - f64::MIN_EXP) as u64;
+    let diff = diff << (f64::MANTISSA_DIGITS - 1);
+    let sign = u64::from(x.is_sign_negative()) << 63;
+    f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
+}
+
+/// Possibly lossy conversion (via [`f64`])
+impl<T: 'static + Copy, const E: u32, const M: u32> AsPrimitive<T> for F16<E, M>
+where
+    Self: Minifloat + Transmute<u16>,
+    f64: AsPrimitive<T>,
+{
+    fn as_(self) -> T {
+        as_f64(self).as_()
     }
 }
