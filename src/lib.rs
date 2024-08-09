@@ -6,20 +6,7 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! A const generic library for minifloats
-//!
-//! This crate provides emulation of minifloats up to 16 bits.  This is done
-//! with two generic structs, [`F8`] and [`F16`], which take up to 8 and 16
-//! bits of storage respectively.  Many parameters are configurable, including
-//!
-//! - Exponent width
-//! - Significand (mantissa) precision
-//! - ([`F8`]-only) Exponent bias
-//! - ([`F8`]-only) NaN encodings: [IEEE][NanStyle::IEEE], [FN][NanStyle::FN], or [FNUZ][NanStyle::FNUZ]
-//!
-//! Note that there is always a sign bit, so [`F8<4, 3>`] already uses up all
-//! 8 bits: 1 sign bit, 4 exponent bits, and 3 significand bits.
-
+#![doc = include_str!("../README.md")]
 #![feature(adt_const_params, generic_const_exprs)]
 #![allow(incomplete_features, private_bounds)]
 #![warn(missing_docs)]
