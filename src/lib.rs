@@ -61,7 +61,7 @@ pub enum NanStyle {
 ///
 /// Constraints:
 /// * `E` + `M` < 8 (there is always a sign bit)
-/// * `E` > 0 (or use an integer type instead)
+/// * `E` ≥ 2 (or use an integer type instead)
 /// * `M` > 0 if `N` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
 #[derive(Debug, Clone, Copy, Default)]
 pub struct F8<
@@ -79,7 +79,7 @@ pub struct F8<
 /// Constraints:
 /// * `E` + `M` < 16 (there is always a sign bit)
 /// * `E` + `M` ≥ 8 (otherwise use [`F8`] instead)
-/// * `E` > 0 (or use an integer type instead)
+/// * `E` ≥ 2 (or use an integer type instead)
 /// * `M` > 0 (∞ ≠ NaN)
 /// * 1.0 is normal
 #[derive(Debug, Clone, Copy, Default)]
@@ -131,7 +131,7 @@ define_round_to_precision!(round_f64_to_precision, f64);
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     /// Check if the parameters are valid
     const VALID: bool = E + M < 8
-        && E > 0
+        && E >= 2
         && (M > 0 || !matches!(N, NanStyle::IEEE))
         && Self::MAX_EXP >= 1
         && Self::MIN_EXP <= 1;
@@ -342,7 +342,7 @@ impl<const E: u32, const M: u32, const B: i32> F8<E, M, { NanStyle::IEEE }, B> {
 
 impl<const E: u32, const M: u32> F16<E, M> {
     /// Check if the parameters are valid
-    const VALID: bool = E + M < 16 && E + M >= 8 && E > 0 && M > 0;
+    const VALID: bool = E + M < 16 && E + M >= 8 && E >= 2 && M > 0;
 
     /// The radix of the internal representation
     pub const RADIX: u32 = 2;
