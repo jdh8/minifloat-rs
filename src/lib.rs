@@ -931,13 +931,13 @@ where
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f32(x: f32) -> Self {
-        let bits = round_f32_to_precision::<M>(x).to_bits();
-        let sign_bit = ((bits >> 31) as u8) << (E + M);
-
         if x.is_nan() {
+            let sign_bit = u8::from(x.is_sign_negative()) << (E + M);
             return Self(Self::NAN.0 | sign_bit);
         }
 
+        let bits = round_f32_to_precision::<M>(x).to_bits();
+        let sign_bit = ((bits >> 31) as u8) << (E + M);
         let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
         let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
         let magnitude = magnitude as i32 - diff;
@@ -956,13 +956,13 @@ where
 
     #[allow(clippy::cast_possible_wrap)]
     fn from_f64(x: f64) -> Self {
-        let bits = round_f64_to_precision::<M>(x).to_bits();
-        let sign_bit = ((bits >> 63) as u8) << (E + M);
-
         if x.is_nan() {
+            let sign_bit = u8::from(x.is_sign_negative()) << (E + M);
             return Self(Self::NAN.0 | sign_bit);
         }
 
+        let bits = round_f64_to_precision::<M>(x).to_bits();
+        let sign_bit = ((bits >> 63) as u8) << (E + M);
         let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
         let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
         let magnitude = magnitude as i64 - diff;
