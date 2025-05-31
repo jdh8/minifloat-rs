@@ -112,21 +112,23 @@ const fn fast_exp2(x: i32) -> f64 {
     })
 }
 
-macro_rules! define_round_to_precision {
-    ($name:ident, $f:ty) => {
-        /// Round `x` to the nearest representable value with `M` bits of precision
-        fn $name<const M: u32>(x: $f) -> $f {
-            let x = x.to_bits();
-            let shift = <$f>::MANTISSA_DIGITS - 1 - M;
-            let ulp = 1 << shift;
-            let bias = (ulp >> 1) - (!(x >> shift) & 1);
-            <$f>::from_bits((x + bias) & !(ulp - 1))
-        }
-    };
+/// Round `x` to the nearest representable value with `M` bits of precision
+fn round_f32_to_precision<const M: u32>(x: f32) -> f32 {
+    let x = x.to_bits();
+    let shift = f32::MANTISSA_DIGITS - 1 - M;
+    let ulp = 1 << shift;
+    let bias = (ulp >> 1) - (!(x >> shift) & 1);
+    f32::from_bits((x + bias) & !(ulp - 1))
 }
 
-define_round_to_precision!(round_f32_to_precision, f32);
-define_round_to_precision!(round_f64_to_precision, f64);
+/// Round `x` to the nearest representable value with `M` bits of precision
+fn round_f64_to_precision<const M: u32>(x: f64) -> f64 {
+    let x = x.to_bits();
+    let shift = f64::MANTISSA_DIGITS - 1 - M;
+    let ulp = 1 << shift;
+    let bias = (ulp >> 1) - (!(x >> shift) & 1);
+    f64::from_bits((x + bias) & !(ulp - 1))
+}
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> F8<E, M, N, B> {
     /// Check if the parameters are valid
@@ -603,39 +605,48 @@ where
     }
 }
 
-macro_rules! impl_partial_cmp {
-    () => {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            if self.is_nan() || other.is_nan() {
-                return None;
-            }
-            if self == other {
-                return Some(Ordering::Equal);
-            }
-
-            let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
-
-            Some(if (self.0 > other.0) ^ sign {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            })
-        }
-    };
-}
-
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> PartialOrd for F8<E, M, N, B>
 where
     Check<{ Self::VALID }>: True,
 {
-    impl_partial_cmp!();
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.is_nan() || other.is_nan() {
+            return None;
+        }
+        if self == other {
+            return Some(Ordering::Equal);
+        }
+
+        let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
+
+        Some(if (self.0 > other.0) ^ sign {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        })
+    }
 }
 
 impl<const E: u32, const M: u32> PartialOrd for F16<E, M>
 where
     Check<{ Self::VALID }>: True,
 {
-    impl_partial_cmp!();
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.is_nan() || other.is_nan() {
+            return None;
+        }
+        if self == other {
+            return Some(Ordering::Equal);
+        }
+
+        let sign = (self.0 | other.0) >> (E + M) & 1 == 1;
+
+        Some(if (self.0 > other.0) ^ sign {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        })
+    }
 }
 
 impl<const E: u32, const M: u32, const N: NanStyle, const B: i32> Neg for F8<E, M, N, B> {
