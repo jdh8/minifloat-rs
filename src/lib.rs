@@ -102,7 +102,7 @@ trait True {}
 impl True for Check<true> {}
 
 /// Fast 2<sup>`x`</sup> with bit manipulation
-fn fast_exp2(x: i32) -> f64 {
+const fn fast_exp2(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
         #[allow(clippy::cast_sign_loss)]
