@@ -52,6 +52,71 @@ pub enum NanStyle {
     FNUZ,
 }
 
+/// Generate a minifloat type with at most 8 bits
+#[macro_export]
+macro_rules! minifloat_most8 {
+    ($name:ident, $e:expr, $m:expr, $n:ident, $b:expr, $doc:expr) => {
+        #[allow(non_camel_case_types)]
+        #[doc = "IEEE-like floating-point type, "]
+        #[doc = $doc]
+        pub struct $name;
+
+        impl $name {
+            /// Exponent bitwidth
+            pub const E: u32 = $e;
+
+            /// Explicit significand (mantissa) bitwidth
+            ///
+            /// This width excludes the implicit leading bit.
+            pub const M: u32 = $m;
+
+            /// NaN encoding style
+            pub const N: $crate::NanStyle = $crate::NanStyle::$n;
+
+            /// Exponent bias
+            pub const B: i32 = $b;
+        }
+    };
+    ($name:ident, $e:expr, $m:expr, $n:ident, $b:expr) => {
+        minifloat_most8!(
+            $name,
+            $e,
+            $m,
+            $n,
+            $b,
+            concat!("E", $e, "M", $m, stringify!($n), "B", $b)
+        );
+    };
+    ($name:ident, $e:expr, $m:expr, $n:ident) => {
+        minifloat_most8!(
+            $name,
+            $e,
+            $m,
+            $n,
+            (1 << ($e - 1)) - 1,
+            concat!("E", $e, "M", $m, stringify!($n))
+        );
+    };
+    ($name:ident, $e:expr, $m:expr, $b:expr) => {
+        minifloat_most8!($name, $e, $m, IEEE, $b, concat!("E", $e, "M", $m, "B", $b));
+    };
+    ($name:ident, $e:expr, $m:expr) => {
+        minifloat_most8!(
+            $name,
+            $e,
+            $m,
+            IEEE,
+            (1 << ($e - 1)) - 1,
+            concat!("E", $e, "M", $m)
+        );
+    };
+}
+
+minifloat_most8!(E3M4, 3, 4);
+minifloat_most8!(E3M4FNUZ, 3, 4, FNUZ);
+minifloat_most8!(E4M3B11, 4, 3, 11);
+minifloat_most8!(E4M3FNB11, 4, 3, FN, 11);
+
 /// Minifloat taking up to 8 bits with configurable bias and NaN encoding
 ///
 /// * `E`: exponent width
