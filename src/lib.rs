@@ -178,7 +178,7 @@ const fn fast_exp2(x: i32) -> f64 {
 }
 
 /// Round `x` to the nearest representable value with `M` bits of precision
-fn round_f32_to_precision<const M: u32>(x: f32) -> f32 {
+const fn round_f32_to_precision<const M: u32>(x: f32) -> f32 {
     let x = x.to_bits();
     let shift = f32::MANTISSA_DIGITS - 1 - M;
     let ulp = 1 << shift;
@@ -187,7 +187,7 @@ fn round_f32_to_precision<const M: u32>(x: f32) -> f32 {
 }
 
 /// Round `x` to the nearest representable value with `M` bits of precision
-fn round_f64_to_precision<const M: u32>(x: f64) -> f64 {
+const fn round_f64_to_precision<const M: u32>(x: f64) -> f64 {
     let x = x.to_bits();
     let shift = f64::MANTISSA_DIGITS - 1 - M;
     let ulp = 1 << shift;
