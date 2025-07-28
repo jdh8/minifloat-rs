@@ -52,13 +52,14 @@ pub enum NanStyle {
     FNUZ,
 }
 
-/// Define a minifloat taking up to 8 bits with optional bias and NaN encoding
+/// Publicly define a minifloat taking up to 8 bits
 #[macro_export]
 macro_rules! struct_most_8 {
     ($name:ident, $e:expr, $m:expr, $b:expr, $n:ident) => {
         #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
-        pub struct $name;
+        #[derive(Debug, Clone, Copy, Default)]
+        pub struct $name(u8);
 
         impl $name {
             /// Exponent bitwidth
@@ -74,7 +75,190 @@ macro_rules! struct_most_8 {
 
             /// Exponent bias
             pub const B: i32 = $b;
+
+            /// Total bitwidth
+            pub const BITWIDTH: u32 = 1 + Self::E + Self::M;
+
+            /// The radix of the internal representation
+            pub const RADIX: u32 = 2;
+
+            /// The number of digits in the significand, including the implicit leading bit
+            ///
+            /// Equal to [`M`][Self::M] + 1
+            pub const MANTISSA_DIGITS: u32 = $m + 1;
+
+            /// The maximum exponent
+            ///
+            /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
+            pub const MAX_EXP: i32 = (1 << Self::E)
+                - Self::B
+                - match Self::N {
+                    $crate::NanStyle::IEEE => 1,
+                    $crate::NanStyle::FN => (Self::M == 0) as i32,
+                    $crate::NanStyle::FNUZ => 0,
+                };
+
+            /// One greater than the minimum normal exponent
+            ///
+            /// Normal numbers ≥ 0.5 &times; 2<sup>`MIN_EXP`</sup>.
+            ///
+            /// This quirk comes from C macros `FLT_MIN_EXP` and friends.  However, it
+            /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
+            /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
+            /// interpreted as normal or subnormal.
+            pub const MIN_EXP: i32 = 2 - Self::B;
+
+            /// One representation of NaN
+            pub const NAN: Self = Self(match Self::N {
+                $crate::NanStyle::IEEE => ((1 << (Self::E + 1)) - 1) << (Self::M - 1),
+                $crate::NanStyle::FN => (1 << (Self::E + Self::M)) - 1,
+                $crate::NanStyle::FNUZ => 1 << (Self::E + Self::M),
+            });
+
+            /// The largest number of this type
+            ///
+            /// This value would be +∞ if the type has infinities.  Otherwise, it is
+            /// the maximum finite representation.  This value is also the result of
+            /// a positive overflow.
+            pub const HUGE: Self = Self(match Self::N {
+                $crate::NanStyle::IEEE => ((1 << Self::E) - 1) << Self::M,
+                $crate::NanStyle::FN => (1 << (Self::E + Self::M)) - 2,
+                $crate::NanStyle::FNUZ => (1 << (Self::E + Self::M)) - 1,
+            });
+
+            /// The maximum finite number
+            pub const MAX: Self = Self(Self::HUGE.0 - matches!(Self::N, $crate::NanStyle::IEEE) as u8);
+
+            /// The smallest positive (subnormal) number
+            pub const TINY: Self = Self(1);
+
+            /// The smallest positive normal number
+            ///
+            /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>.
+            pub const MIN_POSITIVE: Self = Self(1 << Self::M);
+
+            /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
+            ///
+            /// The difference between 1.0 and the next larger representable number.
+            ///
+            /// Equal to 2<sup>&minus;`M`</sup>.
+            #[allow(clippy::cast_possible_wrap)]
+            pub const EPSILON: Self = Self(match Self::B - Self::M as i32 {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                s @ 1.. => (s as u8) << Self::M,
+                s => 1 << (Self::M as i32 - 1 + s),
+            });
+
+            /// The minimum finite number
+            ///
+            /// Equal to &minus;[`MAX`][Self::MAX].
+            pub const MIN: Self = Self(Self::MAX.0 | 1 << (Self::E + Self::M));
+
+            /// Magnitude mask for internal usage
+            const ABS_MASK: u8 = (1 << (Self::E + Self::M)) - 1;
+
+            /// Raw transmutation from `u8`
+            #[must_use]
+            pub const fn from_bits(v: u8) -> Self {
+                Self(0xFF >> (7 - Self::E - Self::M) & v)
+            }
+
+            /// Raw transmutation to `u8`
+            #[must_use]
+            pub const fn to_bits(self) -> u8 {
+                self.0
+            }
+
+            /// Check if the value is NaN
+            #[must_use]
+            pub const fn is_nan(self) -> bool {
+                match Self::N {
+                    $crate::NanStyle::IEEE => self.0 & Self::ABS_MASK > Self::HUGE.0,
+                    $crate::NanStyle::FN => self.0 & Self::ABS_MASK == Self::NAN.0,
+                    $crate::NanStyle::FNUZ => self.0 == Self::NAN.0,
+                }
+            }
+
+            /// Check if the value is positive or negative infinity
+            #[must_use]
+            pub const fn is_infinite(self) -> bool {
+                matches!(Self::N, $crate::NanStyle::IEEE) && self.0 & Self::ABS_MASK == Self::HUGE.0
+            }
+
+            /// Check if the value is finite, i.e. neither infinite nor NaN
+            #[must_use]
+            pub const fn is_finite(self) -> bool {
+                match Self::N {
+                    $crate::NanStyle::IEEE => self.0 & Self::ABS_MASK < Self::HUGE.0,
+                    _ => !self.is_nan(),
+                }
+            }
+
+            /// Check if the value is [subnormal]
+            ///
+            /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
+            #[must_use]
+            pub const fn is_subnormal(self) -> bool {
+                matches!(self.classify(), core::num::FpCategory::Subnormal)
+            }
+
+            /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
+            ///
+            /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
+            #[must_use]
+            pub const fn is_normal(self) -> bool {
+                matches!(self.classify(), core::num::FpCategory::Normal)
+            }
+
+            /// Classify the value into a floating-point category
+            ///
+            /// If only one property is going to be tested, it is generally faster to
+            /// use the specific predicate instead.
+            #[must_use]
+            pub const fn classify(self) -> core::num::FpCategory {
+                if self.is_nan() {
+                    core::num::FpCategory::Nan
+                } else if self.is_infinite() {
+                    core::num::FpCategory::Infinite
+                } else {
+                    let exp_mask = ((1 << Self::E) - 1) << Self::M;
+                    let man_mask = (1 << Self::M) - 1;
+
+                    match (self.0 & exp_mask, self.0 & man_mask) {
+                        (0, 0) => core::num::FpCategory::Zero,
+                        (0, _) => core::num::FpCategory::Subnormal,
+                        (_, _) => core::num::FpCategory::Normal,
+                    }
+                }
+            }
+
+            /// Check if the sign bit is clear
+            #[must_use]
+            pub const fn is_sign_positive(self) -> bool {
+                self.0 >> (Self::E + Self::M) & 1 == 0
+            }
+
+            /// Check if the sign bit is set
+            #[must_use]
+            pub const fn is_sign_negative(self) -> bool {
+                self.0 >> (Self::E + Self::M) & 1 == 1
+            }
+
+            /// Map sign-magnitude notations to plain unsigned integers
+            ///
+            /// This serves as a hook for the [`Minifloat`] trait.
+            const fn total_cmp_key(x: u8) -> u8 {
+                let sign = 1 << (Self::E + Self::M);
+                let mask = ((x & sign) >> (Self::E + Self::M)) * (sign - 1);
+                x ^ (sign | mask)
+            }
         }
+
+        const _: () = assert!($name::BITWIDTH <= 8);
+        const _: () = assert!($name::E >= 2);
+        const _: () = assert!($name::M > 0 || !matches!($name::N, $crate::NanStyle::IEEE));
+        const _: () = assert!($name::MAX_EXP >= 1);
+        const _: () = assert!($name::MIN_EXP <= 1);
     };
     ($name:ident, $e:expr, $m:expr, $n:ident) => {
         $crate::struct_most_8!($name, $e, $m, (1 << ($e - 1)) - 1, $n);
@@ -86,6 +270,8 @@ macro_rules! struct_most_8 {
         $crate::struct_most_8!($name, $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
+
+struct_most_8!(E4M3FN, 4, 3, FN);
 
 /// Minifloat taking up to 8 bits with configurable bias and NaN encoding
 ///
