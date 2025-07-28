@@ -234,6 +234,74 @@ impl<const E: u32, const M: u32> Most16<E, M> {
     pub const fn abs(self) -> Self {
         Self(self.0 & Self::ABS_MASK)
     }
+
+    /// Probably lossy conversion from [`f32`]
+    ///
+    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+    /// Other values are rounded to the nearest representable value.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn from_f32(x: f32) -> Self {
+        let bits = round_f32_to_precision::<M>(x).to_bits();
+        let sign_bit = ((bits >> 31) as u16) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i32 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = f64::from(x.abs()) * exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return Self(ticks.round_ties_even() as u16 | sign_bit);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(magnitude.min(i32::from(Self::HUGE.0)) as u16 | sign_bit)
+    }
+
+    /// Probably lossy conversion from [`f64`]
+    ///
+    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+    /// Other values are rounded to the nearest representable value.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn from_f64(x: f64) -> Self {
+        let bits = round_f64_to_precision::<M>(x).to_bits();
+        let sign_bit = ((bits >> 63) as u16) << (E + M);
+
+        if x.is_nan() {
+            return Self(Self::NAN.0 | sign_bit);
+        }
+
+        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
+        let magnitude = magnitude as i64 - diff;
+
+        if magnitude < 1 << M {
+            let ticks = x.abs() * exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return Self(ticks.round_ties_even() as u16 | sign_bit);
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        Self(magnitude.min(i64::from(Self::HUGE.0)) as u16 | sign_bit)
+    }
+
+    /// IEEE 754 total-ordering predicate
+    ///
+    /// The normative definition is lengthy, but it is essentially comparing
+    /// sign-magnitude notations.
+    ///
+    /// See also [`f32::total_cmp`],
+    /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
+    #[must_use]
+    pub fn total_cmp(&self, other: &Self) -> Ordering {
+        Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
+    }
 }
 
 impl<const E: u32, const M: u32> PartialEq for Most16<E, M> {
@@ -289,321 +357,6 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
     -8.805_780_458_002_638_34e-5,
     -4.402_823_044_177_721_15e-5,
 ];
-
-/// Generic trait for minifloat types
-///
-/// We are **not** going to implement [`num_traits::Float`][flt] because:
-///
-/// 1. [`FN`][NanStyle::FN] and [`FNUZ`][NanStyle::FNUZ] types do not have infinities.
-/// 2. [`FNUZ`][NanStyle::FNUZ] types do not have a negative zero.
-/// 3. We don't have plans for [arithmetic operations][ops] yet.
-///
-/// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
-/// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
-pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
-    /// Exponent width
-    const E: u32;
-
-    /// Significand (mantissa) precision
-    const M: u32;
-
-    /// Exponent bias, which defaults to 2<sup>`E`&minus;1</sup> &minus; 1
-    const B: i32 = (1 << (Self::E - 1)) - 1;
-
-    /// The radix of the internal representation
-    const RADIX: u32 = 2;
-
-    /// The number of digits in the significand, including the implicit leading bit
-    ///
-    /// Equal to `M` + 1
-    const MANTISSA_DIGITS: u32 = Self::M + 1;
-
-    /// The maximum exponent
-    ///
-    /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
-    const MAX_EXP: i32 = 1 << (Self::E - 1);
-
-    /// One greater than the minimum normal exponent
-    ///
-    /// Normal numbers ≥ 0.5 &times; 2<sup>`MIN_EXP`</sup>.
-    ///
-    /// This quirk comes from C macros `FLT_MIN_EXP` and friends.  However, it
-    /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
-    /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
-    /// interpreted as normal or subnormal.
-    const MIN_EXP: i32 = 3 - Self::MAX_EXP;
-
-    /// Approximate number of significant decimal digits
-    ///
-    /// Equal to floor([`M`][Self::M] log<sub>10</sub>(2))
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    const DIGITS: u32 = (Self::M as f64 * LOG10_2) as u32;
-
-    /// Maximum <var>x</var> such that 10<sup>`x`</sup> is normal
-    ///
-    /// Equal to floor(log<sub>10</sub>([`MAX`][Self::MAX]))
-    #[allow(clippy::cast_possible_truncation)]
-    const MAX_10_EXP: i32 = ((Self::MAX_EXP as f64
-        + LOG2_SIGNIFICAND[Self::MANTISSA_DIGITS as usize])
-        * LOG10_2) as i32;
-
-    /// Minimum <var>x</var> such that 10<sup>`x`</sup> is normal
-    ///
-    /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
-    #[allow(clippy::cast_possible_truncation)]
-    const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * LOG10_2) as i32;
-
-    /// One representation of NaN
-    const NAN: Self;
-
-    /// The largest number of this type
-    ///
-    /// This value would be +∞ if the type has infinities.  Otherwise, it is
-    /// the maximum finite representation.  This value is also the result of
-    /// a positive overflow.
-    const HUGE: Self;
-
-    /// The maximum finite number
-    const MAX: Self;
-
-    /// The smallest positive (subnormal) number
-    const TINY: Self;
-
-    /// The smallest positive normal number
-    ///
-    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
-    const MIN_POSITIVE: Self;
-
-    /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
-    ///
-    /// The difference between 1.0 and the next larger representable number.
-    ///
-    /// Equal to 2<sup>&minus;`M`</sup>.
-    const EPSILON: Self;
-
-    /// The minimum finite number
-    ///
-    /// Equal to &minus;[`MAX`][Self::MAX]
-    const MIN: Self;
-
-    /// Probably lossy conversion from [`f32`]
-    ///
-    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
-    /// Other values are rounded to the nearest representable value.
-    #[must_use]
-    fn from_f32(x: f32) -> Self;
-
-    /// Probably lossy conversion from [`f64`]
-    ///
-    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
-    /// Other values are rounded to the nearest representable value.
-    #[must_use]
-    fn from_f64(x: f64) -> Self;
-
-    /// Check if the value is NaN
-    #[must_use]
-    fn is_nan(self) -> bool;
-
-    /// Check if the value is positive or negative infinity
-    #[must_use]
-    fn is_infinite(self) -> bool;
-
-    /// Check if the value is finite, i.e. neither infinite nor NaN
-    #[must_use]
-    fn is_finite(self) -> bool {
-        !self.is_nan() && !self.is_infinite()
-    }
-
-    /// Check if the value is [subnormal]
-    ///
-    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
-    #[must_use]
-    fn is_subnormal(self) -> bool {
-        matches!(self.classify(), FpCategory::Subnormal)
-    }
-
-    /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
-    ///
-    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
-    #[must_use]
-    fn is_normal(self) -> bool {
-        matches!(self.classify(), FpCategory::Normal)
-    }
-
-    /// Classify the value into a floating-point category
-    ///
-    /// If only one property is going to be tested, it is generally faster to
-    /// use the specific predicate instead.
-    #[must_use]
-    fn classify(self) -> FpCategory;
-
-    /// Check if the sign bit is clear
-    #[must_use]
-    fn is_sign_positive(self) -> bool {
-        !self.is_sign_negative()
-    }
-
-    /// Check if the sign bit is set
-    #[must_use]
-    fn is_sign_negative(self) -> bool;
-
-    /// Get the maximum of two numbers, ignoring NaN
-    #[must_use]
-    fn max(self, other: Self) -> Self {
-        if self >= other || other.is_nan() {
-            self
-        } else {
-            other
-        }
-    }
-
-    /// Get the minimum of two numbers, ignoring NaN
-    #[must_use]
-    fn min(self, other: Self) -> Self {
-        if self <= other || other.is_nan() {
-            self
-        } else {
-            other
-        }
-    }
-
-    /// IEEE 754 total-ordering predicate
-    ///
-    /// The normative definition is lengthy, but it is essentially comparing
-    /// sign-magnitude notations.
-    ///
-    /// See also [`f32::total_cmp`],
-    /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
-    #[must_use]
-    fn total_cmp(&self, other: &Self) -> Ordering;
-
-    /// Get the maximum of two numbers, propagating NaN
-    ///
-    /// For this operation, -0.0 is considered to be less than +0.0 as
-    /// specified in IEEE 754-2019.
-    #[must_use]
-    fn maximum(self, other: Self) -> Self {
-        if self.is_nan() || other.is_nan() {
-            Self::NAN
-        } else {
-            core::cmp::max_by(self, other, Self::total_cmp)
-        }
-    }
-
-    /// Get the minimum of two numbers, propagating NaN
-    ///
-    /// For this operation, -0.0 is considered to be less than +0.0 as
-    /// specified in IEEE 754-2019.
-    #[must_use]
-    fn minimum(self, other: Self) -> Self {
-        if self.is_nan() || other.is_nan() {
-            Self::NAN
-        } else {
-            core::cmp::min_by(self, other, Self::total_cmp)
-        }
-    }
-
-    /// Compute the absolute value
-    #[must_use]
-    fn abs(self) -> Self {
-        if self.is_sign_negative() {
-            -self
-        } else {
-            self
-        }
-    }
-}
-
-impl<const E: u32, const M: u32> Minifloat for Most16<E, M> {
-    const E: u32 = E;
-    const M: u32 = M;
-
-    const NAN: Self = Self::NAN;
-    const HUGE: Self = Self::HUGE;
-    const MAX: Self = Self::MAX;
-    const TINY: Self = Self::TINY;
-    const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
-    const EPSILON: Self = Self::EPSILON;
-    const MIN: Self = Self::MIN;
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn from_f32(x: f32) -> Self {
-        let bits = round_f32_to_precision::<M>(x).to_bits();
-        let sign_bit = ((bits >> 31) as u16) << (E + M);
-
-        if x.is_nan() {
-            return Self(Self::NAN.0 | sign_bit);
-        }
-
-        let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
-        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
-        let magnitude = magnitude as i32 - diff;
-
-        if magnitude < 1 << M {
-            let ticks = f64::from(x.abs()) * exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            return Self(ticks.round_ties_even() as u16 | sign_bit);
-        }
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self(magnitude.min(i32::from(Self::HUGE.0)) as u16 | sign_bit)
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn from_f64(x: f64) -> Self {
-        let bits = round_f64_to_precision::<M>(x).to_bits();
-        let sign_bit = ((bits >> 63) as u16) << (E + M);
-
-        if x.is_nan() {
-            return Self(Self::NAN.0 | sign_bit);
-        }
-
-        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
-        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
-        let magnitude = magnitude as i64 - diff;
-
-        if magnitude < 1 << M {
-            let ticks = x.abs() * exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            return Self(ticks.round_ties_even() as u16 | sign_bit);
-        }
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self(magnitude.min(i64::from(Self::HUGE.0)) as u16 | sign_bit)
-    }
-
-    fn is_nan(self) -> bool {
-        self.is_nan()
-    }
-
-    fn is_infinite(self) -> bool {
-        self.is_infinite()
-    }
-
-    fn is_finite(self) -> bool {
-        self.is_finite()
-    }
-
-    fn classify(self) -> FpCategory {
-        self.classify()
-    }
-
-    fn is_sign_positive(self) -> bool {
-        self.is_sign_positive()
-    }
-
-    fn is_sign_negative(self) -> bool {
-        self.is_sign_negative()
-    }
-
-    fn total_cmp(&self, other: &Self) -> Ordering {
-        Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
-    }
-
-    fn abs(self) -> Self {
-        self.abs()
-    }
-}
 
 macro_rules! define_f32_from {
     ($name:ident, $f:ty) => {
