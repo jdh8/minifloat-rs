@@ -9,39 +9,39 @@
 #![allow(clippy::float_cmp)]
 
 use crate::NanStyle::{FN, FNUZ};
-use crate::{Minifloat, Transmute, F16, F8};
+use crate::{Minifloat, Transmute, Most16, Most8};
 use core::fmt::Debug;
 
 macro_rules! for_each_f8 {
     ($f:ident) => {
-        $f::<F8<2, 5>>();
-        $f::<F8<2, 5, { FN }>>();
-        $f::<F8<2, 5, { FNUZ }>>();
+        $f::<Most8<2, 5>>();
+        $f::<Most8<2, 5, { FN }>>();
+        $f::<Most8<2, 5, { FNUZ }>>();
 
-        $f::<F8<3, 4>>();
-        $f::<F8<3, 4, { FN }>>();
-        $f::<F8<3, 4, { FNUZ }>>();
+        $f::<Most8<3, 4>>();
+        $f::<Most8<3, 4, { FN }>>();
+        $f::<Most8<3, 4, { FNUZ }>>();
 
-        $f::<F8<4, 3>>();
-        $f::<F8<4, 3, { FN }>>();
-        $f::<F8<4, 3, { FNUZ }>>();
-        $f::<F8<4, 3, { FN }, 11>>();
-        $f::<F8<4, 3, { FNUZ }, 11>>();
+        $f::<Most8<4, 3>>();
+        $f::<Most8<4, 3, { FN }>>();
+        $f::<Most8<4, 3, { FNUZ }>>();
+        $f::<Most8<4, 3, { FN }, 11>>();
+        $f::<Most8<4, 3, { FNUZ }, 11>>();
 
-        $f::<F8<5, 2>>();
-        $f::<F8<5, 2, { FN }>>();
-        $f::<F8<5, 2, { FNUZ }>>();
+        $f::<Most8<5, 2>>();
+        $f::<Most8<5, 2, { FN }>>();
+        $f::<Most8<5, 2, { FNUZ }>>();
 
-        $f::<F8<6, 1>>();
-        $f::<F8<6, 1, { FN }>>();
-        $f::<F8<6, 1, { FNUZ }>>();
+        $f::<Most8<6, 1>>();
+        $f::<Most8<6, 1, { FN }>>();
+        $f::<Most8<6, 1, { FNUZ }>>();
 
-        $f::<F8<7, 0, { FN }>>();
-        $f::<F8<7, 0, { FNUZ }>>();
+        $f::<Most8<7, 0, { FN }>>();
+        $f::<Most8<7, 0, { FNUZ }>>();
 
-        $f::<F8<2, 1>>();
-        $f::<F8<2, 1, { FN }>>();
-        $f::<F8<2, 1, { FNUZ }>>();
+        $f::<Most8<2, 1>>();
+        $f::<Most8<2, 1, { FN }>>();
+        $f::<Most8<2, 1, { FNUZ }>>();
     };
 }
 
@@ -49,10 +49,10 @@ macro_rules! for_some_f16 {
     ($f:ident) => {
         $f::<crate::f16>();
         $f::<crate::bf16>();
-        $f::<F16<5, 7>>();
-        $f::<F16<5, 5>>();
-        $f::<F16<6, 4>>();
-        $f::<F16<7, 3>>();
+        $f::<Most16<5, 7>>();
+        $f::<Most16<5, 5>>();
+        $f::<Most16<6, 4>>();
+        $f::<Most16<7, 3>>();
     };
 }
 
@@ -73,13 +73,13 @@ struct BiasConstant<const N: i32>;
 fn test_finite_bits_f8<const E: u32, const M: u32>(x: f32, bits: u8)
 where
     BiasConstant<{ (1 << (E - 1)) - 1 }>:,
-    F8<E, M>: Minifloat,
-    F8<E, M, { FN }>: Minifloat,
-    F8<E, M, { FNUZ }>: Minifloat,
+    Most8<E, M>: Minifloat,
+    Most8<E, M, { FN }>: Minifloat,
+    Most8<E, M, { FNUZ }>: Minifloat,
 {
-    assert_eq!(F8::<E, M>::from_f32(x).to_bits(), bits);
-    assert_eq!(F8::<E, M, { FN }>::from_f32(x).to_bits(), bits);
-    assert_eq!(F8::<E, M, { FNUZ }>::from_f32(x).to_bits(), bits);
+    assert_eq!(Most8::<E, M>::from_f32(x).to_bits(), bits);
+    assert_eq!(Most8::<E, M, { FN }>::from_f32(x).to_bits(), bits);
+    assert_eq!(Most8::<E, M, { FNUZ }>::from_f32(x).to_bits(), bits);
 }
 
 #[test]
@@ -88,21 +88,21 @@ fn test_finite_bits() {
     test_finite_bits_f8::<3, 4>(2.0, 0x40);
     test_finite_bits_f8::<4, 3>(2.0, 0x40);
     test_finite_bits_f8::<5, 2>(2.0, 0x40);
-    assert_eq!(F16::<5, 7>::from_f32(2.0).to_bits(), 0b0_10000_0000000);
+    assert_eq!(Most16::<5, 7>::from_f32(2.0).to_bits(), 0b0_10000_0000000);
     assert_eq!(crate::f16::from_f32(2.0).to_bits(), 0x4000);
     assert_eq!(crate::bf16::from_f32(2.0).to_bits(), 0x4000);
 
     test_finite_bits_f8::<3, 4>(1.0, 0b0_011_0000);
     test_finite_bits_f8::<4, 3>(1.0, 0b0_0111_000);
     test_finite_bits_f8::<5, 2>(1.0, 0b0_01111_00);
-    assert_eq!(F16::<5, 7>::from_f32(1.0).to_bits(), 0b0_01111_0000000);
+    assert_eq!(Most16::<5, 7>::from_f32(1.0).to_bits(), 0b0_01111_0000000);
     assert_eq!(crate::f16::from_f32(1.0).to_bits(), 0b0_01111_00000_00000);
     assert_eq!(crate::bf16::from_f32(1.0).to_bits(), 0b0_0111_1111_0000000);
 
     test_finite_bits_f8::<3, 4>(-1.25, 0b1_011_0100);
     test_finite_bits_f8::<4, 3>(-1.25, 0b1_0111_010);
     test_finite_bits_f8::<5, 2>(-1.25, 0b1_01111_01);
-    assert_eq!(F16::<5, 7>::from_f32(-1.25).to_bits(), 0b1_01111_0100000);
+    assert_eq!(Most16::<5, 7>::from_f32(-1.25).to_bits(), 0b1_01111_0100000);
     assert_eq!(crate::f16::from_f32(-1.25).to_bits(), 0b1_01111_01000_00000);
     assert_eq!(
         crate::bf16::from_f32(-1.25).to_bits(),
