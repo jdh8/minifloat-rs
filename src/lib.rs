@@ -1,6 +1,6 @@
 // This file is part of the minifloat project.
 //
-// Copyright (C) 2024 Chen-Pang He <jdh8@skymizer.com>
+// Copyright (C) 2024-2025 Chen-Pang He <jdh8@skymizer.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
@@ -52,13 +52,12 @@ pub enum NanStyle {
     FNUZ,
 }
 
-/// Generate a minifloat type with at most 8 bits
+/// Define a minifloat taking up to 8 bits with optional bias and NaN encoding
 #[macro_export]
-macro_rules! minifloat_most8 {
-    ($name:ident, $e:expr, $m:expr, $n:ident, $b:expr, $doc:expr) => {
+macro_rules! struct_most_8 {
+    ($name:ident, $e:expr, $m:expr, $b:expr, $n:ident) => {
         #[allow(non_camel_case_types)]
-        #[doc = "IEEE-like floating-point type, "]
-        #[doc = $doc]
+        #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         pub struct $name;
 
         impl $name {
@@ -77,45 +76,16 @@ macro_rules! minifloat_most8 {
             pub const B: i32 = $b;
         }
     };
-    ($name:ident, $e:expr, $m:expr, $n:ident, $b:expr) => {
-        minifloat_most8!(
-            $name,
-            $e,
-            $m,
-            $n,
-            $b,
-            concat!("E", $e, "M", $m, stringify!($n), "B", $b)
-        );
-    };
     ($name:ident, $e:expr, $m:expr, $n:ident) => {
-        minifloat_most8!(
-            $name,
-            $e,
-            $m,
-            $n,
-            (1 << ($e - 1)) - 1,
-            concat!("E", $e, "M", $m, stringify!($n))
-        );
+        $crate::struct_most_8!($name, $e, $m, (1 << ($e - 1)) - 1, $n);
     };
     ($name:ident, $e:expr, $m:expr, $b:expr) => {
-        minifloat_most8!($name, $e, $m, IEEE, $b, concat!("E", $e, "M", $m, "B", $b));
+        $crate::struct_most_8!($name, $e, $m, $b, IEEE);
     };
     ($name:ident, $e:expr, $m:expr) => {
-        minifloat_most8!(
-            $name,
-            $e,
-            $m,
-            IEEE,
-            (1 << ($e - 1)) - 1,
-            concat!("E", $e, "M", $m)
-        );
+        $crate::struct_most_8!($name, $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
-
-minifloat_most8!(E3M4, 3, 4);
-minifloat_most8!(E3M4FNUZ, 3, 4, FNUZ);
-minifloat_most8!(E4M3B11, 4, 3, 11);
-minifloat_most8!(E4M3FNB11, 4, 3, FN, 11);
 
 /// Minifloat taking up to 8 bits with configurable bias and NaN encoding
 ///
