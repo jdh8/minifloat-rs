@@ -64,7 +64,7 @@ macro_rules! are_equivalent {
 
 #[test]
 fn test_exp2() {
-    (-1200..1200).for_each(|x| assert_eq!(crate::fast_exp2(x), f64::from(x).exp2()));
+    (-1200..1200).for_each(|x| assert_eq!(crate::exp2i(x), f64::from(x).exp2()));
 }
 
 struct BiasConstant<const N: i32>;
