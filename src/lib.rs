@@ -7,15 +7,11 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![doc = include_str!("../README.md")]
-#![feature(adt_const_params, generic_const_exprs)]
-#![allow(incomplete_features, private_bounds)]
 #![warn(missing_docs)]
 
 mod test;
 use core::cmp::Ordering;
 use core::f64::consts::LOG10_2;
-use core::marker::ConstParamTy;
-use core::mem;
 use core::num::FpCategory;
 use core::ops::Neg;
 use num_traits::{AsPrimitive, ToPrimitive};
@@ -28,7 +24,7 @@ use num_traits::{AsPrimitive, ToPrimitive};
 /// [llvm]: https://llvm.org/doxygen/structllvm_1_1APFloatBase.html
 /// [ieee]: https://en.wikipedia.org/wiki/IEEE_754
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone, Copy, ConstParamTy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NanStyle {
     /// IEEE 754 NaN encoding
     ///
@@ -74,14 +70,6 @@ pub type f16 = F16<5, 10>;
 #[allow(non_camel_case_types)]
 pub type bf16 = F16<8, 7>;
 
-/// Check a condition at compile time
-struct Check<const COND: bool>;
-
-/// The trait for [`Check<true>`]
-trait True {}
-
-impl True for Check<true> {}
-
 /// Fast 2<sup>`x`</sup> with bit manipulation
 const fn exp2i(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
@@ -112,9 +100,6 @@ const fn round_f64_to_precision<const M: u32>(x: f64) -> f64 {
 }
 
 impl<const E: u32, const M: u32> F16<E, M> {
-    /// Check if the parameters are valid
-    const VALID: bool = E + M < 16 && E + M >= 8 && E >= 2 && M > 0;
-
     /// The radix of the internal representation
     pub const RADIX: u32 = 2;
 
@@ -185,10 +170,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     /// Raw transmutation from `u16`
     #[must_use]
-    pub const fn from_bits(v: u16) -> Self
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn from_bits(v: u16) -> Self {
         Self(0xFFFF >> (15 - E - M) & v)
     }
 
@@ -200,28 +182,19 @@ impl<const E: u32, const M: u32> F16<E, M> {
 
     /// Check if the value is NaN
     #[must_use]
-    pub const fn is_nan(self) -> bool
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn is_nan(self) -> bool {
         self.0 & Self::ABS_MASK > Self::INFINITY.0
     }
 
     /// Check if the value is positive or negative infinity
     #[must_use]
-    pub const fn is_infinite(self) -> bool
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn is_infinite(self) -> bool {
         self.0 & Self::ABS_MASK == Self::INFINITY.0
     }
 
     /// Check if the value is finite, i.e. neither infinite nor NaN
     #[must_use]
-    pub const fn is_finite(self) -> bool
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn is_finite(self) -> bool {
         self.0 & Self::ABS_MASK < Self::INFINITY.0
     }
 
@@ -229,10 +202,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
     ///
     /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
-    pub const fn is_subnormal(self) -> bool
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn is_subnormal(self) -> bool {
         matches!(self.classify(), FpCategory::Subnormal)
     }
 
@@ -240,10 +210,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
     ///
     /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
     #[must_use]
-    pub const fn is_normal(self) -> bool
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn is_normal(self) -> bool {
         matches!(self.classify(), FpCategory::Normal)
     }
 
@@ -252,10 +219,7 @@ impl<const E: u32, const M: u32> F16<E, M> {
     /// If only one property is going to be tested, it is generally faster to
     /// use the specific predicate instead.
     #[must_use]
-    pub const fn classify(self) -> FpCategory
-    where
-        Check<{ Self::VALID }>: True,
-    {
+    pub const fn classify(self) -> FpCategory {
         let exp_mask = ((1 << E) - 1) << M;
         let man_mask = (1 << M) - 1;
 
@@ -302,58 +266,14 @@ impl<const E: u32, const M: u32> F16<E, M> {
     }
 }
 
-trait SameSized<T> {}
-
-impl<T, U> SameSized<T> for U where Check<{ mem::size_of::<T>() == mem::size_of::<Self>() }>: True {}
-
-/// Mutual transmutation
-///
-/// This trait provides an interface of mutual raw transmutation.  The methods
-/// default to using [`core::mem::transmute_copy`] for the conversion, but you
-/// can override them for safer implementations.
-///
-/// In this crate, all [`F8`] types implement `Transmute<u8>`, and all [`F16`]
-/// types implement `Transmute<u16>`.
-pub trait Transmute<T>: Copy + SameSized<T> {
-    /// Raw transmutation from `T`
-    fn from_bits(v: T) -> Self {
-        unsafe { mem::transmute_copy(&v) }
-    }
-
-    /// Raw transmutation to `T`
-    fn to_bits(self) -> T {
-        unsafe { mem::transmute_copy(&self) }
-    }
-}
-
-impl<const E: u32, const M: u32> Transmute<u16> for F16<E, M>
-where
-    Check<{ Self::VALID }>: True,
-    Self: SameSized<u16>,
-{
-    fn from_bits(v: u16) -> Self {
-        Self::from_bits(v)
-    }
-
-    fn to_bits(self) -> u16 {
-        self.0
-    }
-}
-
-impl<const E: u32, const M: u32> PartialEq for F16<E, M>
-where
-    Check<{ Self::VALID }>: True,
-{
+impl<const E: u32, const M: u32> PartialEq for F16<E, M> {
     fn eq(&self, other: &Self) -> bool {
         let eq = self.0 == other.0 && !self.is_nan();
         eq || (self.0 | other.0) & Self::ABS_MASK == 0
     }
 }
 
-impl<const E: u32, const M: u32> PartialOrd for F16<E, M>
-where
-    Check<{ Self::VALID }>: True,
-{
+impl<const E: u32, const M: u32> PartialOrd for F16<E, M> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if self.is_nan() || other.is_nan() {
             return None;
@@ -636,10 +556,7 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     }
 }
 
-impl<const E: u32, const M: u32> Minifloat for F16<E, M>
-where
-    Check<{ Self::VALID }>: True,
-{
+impl<const E: u32, const M: u32> Minifloat for F16<E, M> {
     const E: u32 = E;
     const M: u32 = M;
 
@@ -758,18 +675,6 @@ macro_rules! define_f32_from {
     };
 }
 
-/// Lossless conversion to `f32`
-///
-/// Enabled only when every value of the source type is representable in `f32`.
-impl<const E: u32, const M: u32> From<F16<E, M>> for f32
-where
-    Check<{ F16::<E, M>::VALID }>: True,
-    Check<{ F16::<E, M>::MAX_EXP <= Self::MAX_EXP }>: True,
-    Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
-{
-    define_f32_from!(from, F16<E, M>);
-}
-
 macro_rules! define_f64_from {
     ($name:ident, $f:ty) => {
         fn $name(x: $f) -> f64 {
@@ -797,19 +702,8 @@ macro_rules! define_f64_from {
     };
 }
 
-/// Lossless conversion to `f64`
-///
-/// Enabled only when every value of the source type is representable in `f64`.
-impl<const E: u32, const M: u32> From<F16<E, M>> for f64
-where
-    Check<{ F16::<E, M>::VALID }>: True,
-    Check<{ F16::<E, M>::MAX_EXP <= Self::MAX_EXP }>: True,
-    Check<{ F16::<E, M>::MIN_EXP >= Self::MIN_EXP }>: True,
-{
-    define_f64_from!(from, F16<E, M>);
-}
-
-fn as_f64<T: Minifloat + Transmute<u16>>(x: T) -> f64 {
+fn as_f64<const E: u32, const M: u32>(x: F16<E, M>) -> f64 {
+    //type T = F16::<E, M>;
     let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
     let magnitude = x.abs().to_bits();
 
@@ -819,83 +713,45 @@ fn as_f64<T: Minifloat + Transmute<u16>>(x: T) -> f64 {
     if x.is_infinite() {
         return f64::INFINITY * sign;
     }
-    if i32::from(magnitude) >= (f64::MAX_EXP + T::B) << T::M {
+    if i32::from(magnitude) >= (f64::MAX_EXP + F16::<E, M>::B) << F16::<E, M>::M {
         return f64::INFINITY * sign;
     }
-    if magnitude < 1 << T::M {
+    if magnitude < 1 << F16::<E, M>::M {
         #[allow(clippy::cast_possible_wrap)]
-        let shift = T::MIN_EXP - T::MANTISSA_DIGITS as i32;
+        let shift = F16::<E, M>::MIN_EXP - F16::<E, M>::MANTISSA_DIGITS as i32;
         return exp2i(shift) * sign * f64::from(magnitude);
     }
-    if i32::from(magnitude >> T::M) < f64::MIN_EXP + T::B {
-        let significand = (magnitude & ((1 << T::M) - 1)) | 1 << T::M;
-        let exponent = i32::from(magnitude >> T::M) - T::B;
+    if i32::from(magnitude >> F16::<E, M>::M) < f64::MIN_EXP + F16::<E, M>::B {
+        let significand = (magnitude & ((1 << F16::<E, M>::M) - 1)) | 1 << F16::<E, M>::M;
+        let exponent = i32::from(magnitude >> F16::<E, M>::M) - F16::<E, M>::B;
         #[allow(clippy::cast_possible_wrap)]
-        return exp2i(exponent - T::M as i32) * sign * f64::from(significand);
+        return exp2i(exponent - F16::<E, M>::M as i32) * sign * f64::from(significand);
     }
-    let shift = f64::MANTISSA_DIGITS - T::MANTISSA_DIGITS;
+    let shift = f64::MANTISSA_DIGITS - F16::<E, M>::MANTISSA_DIGITS;
     #[allow(clippy::cast_sign_loss)]
-    let diff = (T::MIN_EXP - f64::MIN_EXP) as u64;
+    let diff = (F16::<E, M>::MIN_EXP - f64::MIN_EXP) as u64;
     let diff = diff << (f64::MANTISSA_DIGITS - 1);
     let sign = u64::from(x.is_sign_negative()) << 63;
     f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
 }
 
-/// Possibly lossy conversion (via [`f64`])
-impl<T: 'static + Copy, const E: u32, const M: u32> AsPrimitive<T> for F16<E, M>
-where
-    Self: Minifloat + Transmute<u16>,
-    f64: AsPrimitive<T>,
-{
-    fn as_(self) -> T {
-        as_f64(self).as_()
-    }
-}
-
-/// Possibly lossy conversion (via [`f64`])
-impl<const E: u32, const M: u32> ToPrimitive for F16<E, M>
-where
-    Self: Minifloat + Transmute<u16>,
-{
-    fn to_i64(&self) -> Option<i64> {
-        as_f64(*self).to_i64()
-    }
-
-    fn to_u64(&self) -> Option<u64> {
-        as_f64(*self).to_u64()
-    }
-
-    fn to_i128(&self) -> Option<i128> {
-        as_f64(*self).to_i128()
-    }
-
-    fn to_u128(&self) -> Option<u128> {
-        as_f64(*self).to_u128()
-    }
-
-    fn to_f32(&self) -> Option<f32> {
-        as_f64(*self).to_f32()
-    }
-
-    fn to_f64(&self) -> Option<f64> {
-        Some(as_f64(*self))
-    }
-}
-
-struct ConstU32<const N: u32>;
-
 /// IEEE-like minifloat taking at most 8 bits
 ///
+/// * `E`: exponent bit-width
+/// * `M`: explicit significand (mantissa) bit-width
+///
+/// Constraints:
+/// * `E` + `M` < 8 (there is always a sign bit)
+/// * `E` ≥ 2 (or use an integer type instead)
+/// * `M` > 0 if [`Self::N`] is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
+///
 /// Types generated by [`struct_most_8!`] implement this trait.
-pub trait FloatMost8: Sized {
-    /// Explicit significand (mantissa) bitwidth
-    ///
-    /// This constant is required for internal technical reasons.
-    /// [`Self::from_f32`] and [`Self::from_f64`] require `M` to break the loop.
-    const M: u32;
+pub trait FloatMost8<const E: u32, const M: u32>: Sized {
+    /// Exponent bit-width
+    const E: u32 = E;
 
-    /// Exponent bitwidth
-    const E: u32 = Self::E;
+    /// Significand (mantissa) precision
+    const M: u32 = M;
 
     /// Exponent bias
     const B: i32 = Self::B;
@@ -904,7 +760,7 @@ pub trait FloatMost8: Sized {
     const N: NanStyle = Self::N;
 
     /// Total bitwidth
-    const BITWIDTH: u32 = 1 + Self::E + Self::M;
+    const BITWIDTH: u32 = 1 + E + M;
 
     /// The radix of the internal representation
     const RADIX: u32 = 2;
@@ -912,16 +768,16 @@ pub trait FloatMost8: Sized {
     /// The number of digits in the significand, including the implicit leading bit
     ///
     /// Equal to `M` + 1
-    const MANTISSA_DIGITS: u32 = Self::M + 1;
+    const MANTISSA_DIGITS: u32 = M + 1;
 
     /// The maximum exponent
     ///
     /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
-    const MAX_EXP: i32 = (1 << Self::E)
+    const MAX_EXP: i32 = (1 << E)
         - Self::B
         - match Self::N {
             NanStyle::IEEE => 1,
-            NanStyle::FN => (Self::M == 0) as i32,
+            NanStyle::FN => (M == 0) as i32,
             NanStyle::FNUZ => 0,
         };
 
@@ -939,15 +795,15 @@ pub trait FloatMost8: Sized {
     ///
     /// Equal to floor([`M`][Self::M] log<sub>10</sub>(2))
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    const DIGITS: u32 = (Self::M as f64 * LOG10_2) as u32;
+    const DIGITS: u32 = (M as f64 * LOG10_2) as u32;
 
     /// Maximum <var>x</var> such that 10<sup>`x`</sup> is normal
     ///
     /// Equal to floor(log<sub>10</sub>([`MAX`][Self::MAX]))
     #[allow(clippy::cast_possible_truncation)]
     const MAX_10_EXP: i32 = {
-        let exponent = (1 << Self::E) - Self::B - matches!(Self::N, NanStyle::IEEE) as i32;
-        let precision = Self::M + !matches!(Self::N, NanStyle::FN) as u32;
+        let exponent = (1 << E) - Self::B - matches!(Self::N, NanStyle::IEEE) as i32;
+        let precision = M + !matches!(Self::N, NanStyle::FN) as u32;
         let log2_max = exponent as f64 + LOG2_SIGNIFICAND[precision as usize];
         (log2_max * LOG10_2) as i32
     };
@@ -1005,22 +861,19 @@ pub trait FloatMost8: Sized {
     /// Other values are rounded to the nearest representable value.
     #[must_use]
     #[allow(clippy::cast_possible_wrap)]
-    fn from_f32(x: f32) -> Self
-    where
-        ConstU32<{ Self::M }>:,
-    {
+    fn from_f32(x: f32) -> Self {
         if x.is_nan() {
-            let sign_bit = u8::from(x.is_sign_negative()) << (Self::E + Self::M);
+            let sign_bit = u8::from(x.is_sign_negative()) << (E + M);
             return Self::from_bits(Self::NAN.to_bits() | sign_bit);
         }
 
-        let bits = round_f32_to_precision::<{ Self::M }>(x).to_bits();
-        let sign_bit = ((bits >> 31) as u8) << (Self::E + Self::M);
-        let diff = (Self::MIN_EXP - f32::MIN_EXP) << Self::M;
-        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - Self::M);
+        let bits = round_f32_to_precision::<M>(x).to_bits();
+        let sign_bit = ((bits >> 31) as u8) << (E + M);
+        let diff = (Self::MIN_EXP - f32::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - M);
         let magnitude = magnitude as i32 - diff;
 
-        if magnitude < 1 << Self::M {
+        if magnitude < 1 << M {
             let ticks = f64::from(x.abs()) * exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let ticks = ticks.round_ties_even() as u8;
@@ -1039,22 +892,19 @@ pub trait FloatMost8: Sized {
     /// Other values are rounded to the nearest representable value.
     #[must_use]
     #[allow(clippy::cast_possible_wrap)]
-    fn from_f64(x: f64) -> Self
-    where
-        ConstU32<{ Self::M }>:,
-    {
+    fn from_f64(x: f64) -> Self {
         if x.is_nan() {
-            let sign_bit = u8::from(x.is_sign_negative()) << (Self::E + Self::M);
+            let sign_bit = u8::from(x.is_sign_negative()) << (E + M);
             return Self::from_bits(Self::NAN.to_bits() | sign_bit);
         }
 
-        let bits = round_f64_to_precision::<{ Self::M }>(x).to_bits();
-        let sign_bit = ((bits >> 63) as u8) << (Self::E + Self::M);
-        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << Self::M;
-        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - Self::M);
+        let bits = round_f64_to_precision::<M>(x).to_bits();
+        let sign_bit = ((bits >> 63) as u8) << (E + M);
+        let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << M;
+        let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - M);
         let magnitude = magnitude as i64 - diff;
 
-        if magnitude < 1 << Self::M {
+        if magnitude < 1 << M {
             let ticks = x.abs() * exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let ticks = ticks.round_ties_even() as u8;
@@ -1080,10 +930,10 @@ pub trait FloatMost8: Sized {
 
 /// Publicly define a minifloat taking up to 8 bits
 ///
-/// * `$e`: exponent width
-/// * `$m`: significand (mantissa) precision
-/// * `$n`: NaN encoding style
+/// * `$e`: exponent bit-width
+/// * `$m`: explicit significand (mantissa) bit-width
 /// * `$b`: exponent bias, which defaults to 2<sup>`$e`&minus;1</sup> &minus; 1
+/// * `$n`: NaN encoding style
 ///
 /// Constraints:
 /// * `$e` + `$m` < 8 (there is always a sign bit)
@@ -1332,9 +1182,7 @@ macro_rules! struct_most_8 {
             }
         }
 
-        impl $crate::FloatMost8 for $name {
-            const M: u32 = Self::M;
-
+        impl $crate::FloatMost8<$e, $m> for $name {
             fn from_bits(v: u8) -> Self {
                 Self::from_bits(v)
             }
