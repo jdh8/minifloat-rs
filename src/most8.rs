@@ -316,14 +316,14 @@ pub trait Most8<const E: u32, const M: u32>:
     }
 
     /// Lossless conversion to [`f32`]
-    fn to_f32(x: Self) -> f32 {
-        let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
-        let magnitude = x.to_bits() & Self::ABS_MASK;
+    fn to_f32(self) -> f32 {
+        let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
+        let magnitude = self.to_bits() & Self::ABS_MASK;
 
-        if x.is_nan() {
+        if self.is_nan() {
             return f32::NAN.copysign(sign);
         }
-        if x.is_infinite() {
+        if self.is_infinite() {
             return f32::INFINITY * sign;
         }
         if magnitude < 1 << M {
@@ -336,7 +336,7 @@ pub trait Most8<const E: u32, const M: u32>:
         #[allow(clippy::cast_sign_loss)]
         let diff = (Self::MIN_EXP - f32::MIN_EXP) as u32;
         let diff = diff << (f32::MANTISSA_DIGITS - 1);
-        let sign = u32::from(x.is_sign_negative()) << 31;
+        let sign = u32::from(self.is_sign_negative()) << 31;
         f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
     }
 }
@@ -607,6 +607,13 @@ macro_rules! most8 {
 
             fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
                 Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
+            }
+        }
+
+        impl From<$name> for f32 {
+            fn from(x: $name) -> Self {
+                use $crate::Most8;
+                x.to_f32()
             }
         }
     };
