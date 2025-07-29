@@ -182,7 +182,7 @@ pub trait Most8<const E: u32, const M: u32>:
     fn is_nan(self) -> bool {
         match Self::N {
             NanStyle::IEEE => self.to_bits() & Self::ABS_MASK > Self::HUGE.to_bits(),
-            NanStyle::FN => self.to_bits() & Self::ABS_MASK == Self::NAN.to_bits(),
+            NanStyle::FN => self.to_bits() & Self::ABS_MASK == Self::NAN.to_bits() & Self::ABS_MASK,
             NanStyle::FNUZ => self.to_bits() == Self::NAN.to_bits(),
         }
     }
@@ -472,8 +472,9 @@ macro_rules! most8 {
             #[must_use]
             pub const fn is_nan(self) -> bool {
                 match Self::N {
+                    #[allow(clippy::bad_bit_mask)]
                     $crate::NanStyle::IEEE => self.0 & Self::ABS_MASK > Self::HUGE.0,
-                    $crate::NanStyle::FN => self.0 & Self::ABS_MASK == Self::NAN.0,
+                    $crate::NanStyle::FN => self.0 & Self::ABS_MASK == Self::NAN.0 & Self::ABS_MASK,
                     $crate::NanStyle::FNUZ => self.0 == Self::NAN.0,
                 }
             }
