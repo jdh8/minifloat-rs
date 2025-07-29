@@ -341,7 +341,7 @@ pub trait Most8<const E: u32, const M: u32>:
     }
 }
 
-/// Publicly define a minifloat taking up to 8 bits
+/// Define a minifloat taking up to 8 bits
 ///
 /// * `$e`: exponent bit-width
 /// * `$m`: explicit significand (mantissa) bit-width
@@ -354,11 +354,11 @@ pub trait Most8<const E: u32, const M: u32>:
 /// * `$m` > 0 if `$n` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
 #[macro_export]
 macro_rules! most8 {
-    ($name:ident, $e:expr, $m:expr, $b:expr, $n:ident) => {
+    ($vis:vis struct $name:ident : $e:expr, $m:expr, $b:expr, $n:ident) => {
         #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         #[derive(Debug, Clone, Copy, Default)]
-        pub struct $name(u8);
+        $vis struct $name(u8);
 
         impl $name {
             /// Exponent bitwidth
@@ -628,13 +628,13 @@ macro_rules! most8 {
             }
         }
     };
-    ($name:ident, $e:expr, $m:expr, $n:ident) => {
-        $crate::most8!($name, $e, $m, (1 << ($e - 1)) - 1, $n);
+    ($vis:vis struct $name:ident : $e:expr, $m:expr, $n:ident) => {
+        $crate::most8!($vis struct $name : $e, $m, (1 << ($e - 1)) - 1, $n);
     };
-    ($name:ident, $e:expr, $m:expr, $b:expr) => {
-        $crate::most8!($name, $e, $m, $b, IEEE);
+    ($vis:vis struct $name:ident : $e:expr, $m:expr, $b:expr) => {
+        $crate::most8!($vis struct $name : $e, $m, $b, IEEE);
     };
-    ($name:ident, $e:expr, $m:expr) => {
-        $crate::most8!($name, $e, $m, (1 << ($e - 1)) - 1, IEEE);
+    ($vis:vis struct $name:ident : $e:expr, $m:expr) => {
+        $crate::most8!($vis struct $name : $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
