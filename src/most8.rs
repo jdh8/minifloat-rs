@@ -354,7 +354,7 @@ pub trait Most8<const E: u32, const M: u32>:
 /// * `$m` > 0 if `$n` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
 #[macro_export]
 macro_rules! most8 {
-    ($vis:vis struct $name:ident : $e:expr, $m:expr, $b:expr, $n:ident) => {
+    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr, $b:expr, $n:ident) => {
         #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         #[derive(Debug, Clone, Copy, Default)]
@@ -628,13 +628,13 @@ macro_rules! most8 {
             }
         }
     };
-    ($vis:vis struct $name:ident : $e:expr, $m:expr, $n:ident) => {
-        $crate::most8!($vis struct $name : $e, $m, (1 << ($e - 1)) - 1, $n);
+    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr, $n:ident) => {
+        $crate::most8!($vis struct $name(u8): $e, $m, (1 << ($e - 1)) - 1, $n);
     };
-    ($vis:vis struct $name:ident : $e:expr, $m:expr, $b:expr) => {
-        $crate::most8!($vis struct $name : $e, $m, $b, IEEE);
+    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr, $b:expr) => {
+        $crate::most8!($vis struct $name(u8): $e, $m, $b, IEEE);
     };
-    ($vis:vis struct $name:ident : $e:expr, $m:expr) => {
-        $crate::most8!($vis struct $name : $e, $m, (1 << ($e - 1)) - 1, IEEE);
+    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr) => {
+        $crate::most8!($vis struct $name(u8): $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
