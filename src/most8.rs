@@ -63,10 +63,10 @@ pub trait Most8<const E: u32, const M: u32>:
     const M: u32 = M;
 
     /// Exponent bias
-    const B: i32 = Self::B;
+    const B: i32;
 
     /// NaN encoding style
-    const N: NanStyle = Self::N;
+    const N: NanStyle;
 
     /// Total bitwidth
     const BITWIDTH: u32 = 1 + E + M;
@@ -124,37 +124,37 @@ pub trait Most8<const E: u32, const M: u32>:
     const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * crate::LOG10_2) as i32;
 
     /// One representation of NaN
-    const NAN: Self = Self::NAN;
+    const NAN: Self;
 
     /// The largest number of this type
     ///
     /// This value would be +∞ if the type has infinities.  Otherwise, it is
     /// the maximum finite representation.  This value is also the result of
     /// a positive overflow.
-    const HUGE: Self = Self::HUGE;
+    const HUGE: Self;
 
     /// The maximum finite number
-    const MAX: Self = Self::MAX;
+    const MAX: Self;
 
     /// The smallest positive (subnormal) number
-    const TINY: Self = Self::TINY;
+    const TINY: Self;
 
     /// The smallest positive normal number
     ///
     /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
-    const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+    const MIN_POSITIVE: Self;
 
     /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
     ///
     /// The difference between 1.0 and the next larger representable number.
     ///
     /// Equal to 2<sup>&minus;`M`</sup>.
-    const EPSILON: Self = Self::EPSILON;
+    const EPSILON: Self;
 
     /// The minimum finite number
     ///
     /// Equal to &minus;[`MAX`][Self::MAX]
-    const MIN: Self = Self::MIN;
+    const MIN: Self;
 
     /// Magnitude mask for internal usage
     const ABS_MASK: u8 = (1 << (E + M)) - 1;
@@ -597,6 +597,17 @@ macro_rules! most8 {
         }
 
         impl $crate::Most8<$e, $m> for $name {
+            const B: i32 = $b;
+            const N: $crate::NanStyle = $crate::NanStyle::$n;
+
+            const NAN: Self = Self::NAN;
+            const HUGE: Self = Self::HUGE;
+            const MAX: Self = Self::MAX;
+            const TINY: Self = Self::TINY;
+            const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+            const EPSILON: Self = Self::EPSILON;
+            const MIN: Self = Self::MIN;
+
             fn from_bits(v: u8) -> Self {
                 Self::from_bits(v)
             }
