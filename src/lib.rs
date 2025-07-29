@@ -445,3 +445,5 @@ fn as_f64<const E: u32, const M: u32>(x: Most16<E, M>) -> f64 {
     let sign = u64::from(x.is_sign_negative()) << 63;
     f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
 }
+
+most8!(E4M3FN, 4, 3, FN);

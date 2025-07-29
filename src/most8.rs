@@ -156,6 +156,9 @@ pub trait Most8<const E: u32, const M: u32>:
     /// Equal to &minus;[`MAX`][Self::MAX]
     const MIN: Self = Self::MIN;
 
+    /// Magnitude mask for internal usage
+    const ABS_MASK: u8 = (1 << (E + M)) - 1;
+
     /// Raw transmutation from `u8`
     #[must_use]
     fn from_bits(v: u8) -> Self;
@@ -163,6 +166,91 @@ pub trait Most8<const E: u32, const M: u32>:
     /// Raw transmutation to `u8`
     #[must_use]
     fn to_bits(self) -> u8;
+
+    /// IEEE 754 total-ordering predicate
+    ///
+    /// The normative definition is lengthy, but it is essentially comparing
+    /// sign-magnitude notations.
+    ///
+    /// See also [`f32::total_cmp`],
+    /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
+    #[must_use]
+    fn total_cmp(&self, other: &Self) -> Ordering;
+
+    /// Check if the value is NaN
+    #[must_use]
+    fn is_nan(self) -> bool {
+        match Self::N {
+            NanStyle::IEEE => self.to_bits() & Self::ABS_MASK > Self::HUGE.to_bits(),
+            NanStyle::FN => self.to_bits() & Self::ABS_MASK == Self::NAN.to_bits(),
+            NanStyle::FNUZ => self.to_bits() == Self::NAN.to_bits(),
+        }
+    }
+
+    /// Check if the value is positive or negative infinity
+    #[must_use]
+    fn is_infinite(self) -> bool {
+        matches!(Self::N, NanStyle::IEEE) && self.to_bits() & Self::ABS_MASK == Self::HUGE.to_bits()
+    }
+
+    /// Check if the value is finite, i.e. neither infinite nor NaN
+    #[must_use]
+    fn is_finite(self) -> bool {
+        match Self::N {
+            NanStyle::IEEE => self.to_bits() & Self::ABS_MASK < Self::HUGE.to_bits(),
+            _ => !self.is_nan(),
+        }
+    }
+
+    /// Check if the value is [subnormal]
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
+    #[must_use]
+    fn is_subnormal(self) -> bool {
+        matches!(self.classify(), core::num::FpCategory::Subnormal)
+    }
+
+    /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
+    #[must_use]
+    fn is_normal(self) -> bool {
+        matches!(self.classify(), core::num::FpCategory::Normal)
+    }
+
+    /// Classify the value into a floating-point category
+    ///
+    /// If only one property is going to be tested, it is generally faster to
+    /// use the specific predicate instead.
+    #[must_use]
+    fn classify(self) -> core::num::FpCategory {
+        if self.is_nan() {
+            core::num::FpCategory::Nan
+        } else if self.is_infinite() {
+            core::num::FpCategory::Infinite
+        } else {
+            let exp_mask = ((1 << E) - 1) << M;
+            let man_mask = (1 << M) - 1;
+
+            match (self.to_bits() & exp_mask, self.to_bits() & man_mask) {
+                (0, 0) => core::num::FpCategory::Zero,
+                (0, _) => core::num::FpCategory::Subnormal,
+                (_, _) => core::num::FpCategory::Normal,
+            }
+        }
+    }
+
+    /// Check if the sign bit is clear
+    #[must_use]
+    fn is_sign_positive(self) -> bool {
+        self.to_bits() >> (E + M) & 1 == 0
+    }
+
+    /// Check if the sign bit is set
+    #[must_use]
+    fn is_sign_negative(self) -> bool {
+        self.to_bits() >> (E + M) & 1 == 1
+    }
 
     /// Probably lossy conversion from [`f32`]
     ///
@@ -227,15 +315,30 @@ pub trait Most8<const E: u32, const M: u32>:
         Self::from_bits(magnitude.min(i64::from(Self::HUGE.to_bits())) as u8 | sign_bit)
     }
 
-    /// IEEE 754 total-ordering predicate
-    ///
-    /// The normative definition is lengthy, but it is essentially comparing
-    /// sign-magnitude notations.
-    ///
-    /// See also [`f32::total_cmp`],
-    /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
-    #[must_use]
-    fn total_cmp(&self, other: &Self) -> Ordering;
+    /// Lossless conversion to [`f32`]
+    fn to_f32(x: Self) -> f32 {
+        let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
+        let magnitude = x.to_bits() & Self::ABS_MASK;
+
+        if x.is_nan() {
+            return f32::NAN.copysign(sign);
+        }
+        if x.is_infinite() {
+            return f32::INFINITY * sign;
+        }
+        if magnitude < 1 << M {
+            #[allow(clippy::cast_possible_wrap)]
+            let shift = Self::MIN_EXP - Self::MANTISSA_DIGITS as i32;
+            #[allow(clippy::cast_possible_truncation)]
+            return (crate::exp2i(shift) * f64::from(sign) * f64::from(magnitude)) as f32;
+        }
+        let shift = f32::MANTISSA_DIGITS - Self::MANTISSA_DIGITS;
+        #[allow(clippy::cast_sign_loss)]
+        let diff = (Self::MIN_EXP - f32::MIN_EXP) as u32;
+        let diff = diff << (f32::MANTISSA_DIGITS - 1);
+        let sign = u32::from(x.is_sign_negative()) << 31;
+        f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
+    }
 }
 
 /// Publicly define a minifloat taking up to 8 bits
@@ -516,5 +619,3 @@ macro_rules! most8 {
         $crate::most8!($name, $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
-
-most8!(E4M3FN, 4, 3, FN);
