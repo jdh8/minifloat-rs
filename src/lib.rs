@@ -484,6 +484,10 @@ pub trait Most8<const E: u32, const M: u32>:
     }
 }
 
+/// Internal macro to select the correct sized trait implementation
+///
+/// This macro needs to be public for [`minifloat!`] to invoke, but it is not
+/// intended for general use.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! select_sized_trait {
