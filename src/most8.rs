@@ -7,7 +7,7 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use core::cmp::Ordering;
-use core::ops::Neg;
+use core::ops::{BitAnd, Neg};
 
 /// NaN encoding style
 ///
@@ -354,11 +354,11 @@ pub trait Most8<const E: u32, const M: u32>:
 /// * `$m` > 0 if `$n` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
 #[macro_export]
 macro_rules! most8 {
-    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr, $b:expr, $n:ident) => {
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $n:ident) => {
         #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         #[derive(Debug, Clone, Copy, Default)]
-        $vis struct $name(u8);
+        $vis struct $name($bits);
 
         impl $name {
             /// Exponent bitwidth
@@ -426,7 +426,7 @@ macro_rules! most8 {
             });
 
             /// The maximum finite number
-            pub const MAX: Self = Self(Self::HUGE.0 - matches!(Self::N, $crate::NanStyle::IEEE) as u8);
+            pub const MAX: Self = Self(Self::HUGE.0 - matches!(Self::N, $crate::NanStyle::IEEE) as $bits);
 
             /// The smallest positive (subnormal) number
             pub const TINY: Self = Self(1);
@@ -454,17 +454,17 @@ macro_rules! most8 {
             pub const MIN: Self = Self(Self::MAX.0 | 1 << (Self::E + Self::M));
 
             /// Magnitude mask for internal usage
-            const ABS_MASK: u8 = (1 << (Self::E + Self::M)) - 1;
+            const ABS_MASK: $bits = (1 << (Self::E + Self::M)) - 1;
 
-            /// Raw transmutation from `u8`
+            #[doc = concat!("Raw transmutation from [`", stringify!($bits), "`]")]
             #[must_use]
-            pub const fn from_bits(v: u8) -> Self {
+            pub const fn from_bits(v: $bits) -> Self {
                 Self(0xFF >> (7 - Self::E - Self::M) & v)
             }
 
-            /// Raw transmutation to `u8`
+            #[doc = concat!("Raw transmutation to [`", stringify!($bits), "`]")]
             #[must_use]
-            pub const fn to_bits(self) -> u8 {
+            pub const fn to_bits(self) -> $bits {
                 self.0
             }
 
@@ -547,7 +547,7 @@ macro_rules! most8 {
             /// Map sign-magnitude notations to plain unsigned integers
             ///
             /// This serves as a hook for the [`Minifloat`] trait.
-            const fn total_cmp_key(x: u8) -> u8 {
+            const fn total_cmp_key(x: $bits) -> $bits {
                 let sign = 1 << (Self::E + Self::M);
                 let mask = ((x & sign) >> (Self::E + Self::M)) * (sign - 1);
                 x ^ (sign | mask)
@@ -591,7 +591,7 @@ macro_rules! most8 {
 
             fn neg(self) -> Self::Output {
                 let flag = matches!(Self::N, $crate::NanStyle::FNUZ) && self.0 & Self::ABS_MASK == 0;
-                let switch = u8::from(!flag) << (Self::E + Self::M);
+                let switch = <$bits>::from(!flag) << (Self::E + Self::M);
                 Self(self.0 ^ switch)
             }
         }
@@ -608,11 +608,11 @@ macro_rules! most8 {
             const EPSILON: Self = Self::EPSILON;
             const MIN: Self = Self::MIN;
 
-            fn from_bits(v: u8) -> Self {
+            fn from_bits(v: $bits) -> Self {
                 Self::from_bits(v)
             }
 
-            fn to_bits(self) -> u8 {
+            fn to_bits(self) -> $bits {
                 self.to_bits()
             }
 
@@ -620,21 +620,14 @@ macro_rules! most8 {
                 Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
             }
         }
-
-        impl From<$name> for f32 {
-            fn from(x: $name) -> Self {
-                use $crate::Most8;
-                x.to_f32()
-            }
-        }
     };
-    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr, $n:ident) => {
-        $crate::most8!($vis struct $name(u8): $e, $m, (1 << ($e - 1)) - 1, $n);
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $n:ident) => {
+        $crate::most8!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, $n);
     };
-    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr, $b:expr) => {
-        $crate::most8!($vis struct $name(u8): $e, $m, $b, IEEE);
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr) => {
+        $crate::most8!($vis struct $name($bits): $e, $m, $b, IEEE);
     };
-    ($vis:vis struct $name:ident(u8): $e:expr, $m:expr) => {
-        $crate::most8!($vis struct $name(u8): $e, $m, (1 << ($e - 1)) - 1, IEEE);
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr) => {
+        $crate::most8!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
