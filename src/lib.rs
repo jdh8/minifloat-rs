@@ -461,5 +461,5 @@ macro_rules! minifloat {
     };
 }
 
-minifloat!(pub struct f16(u16): 5, 10);
-minifloat!(pub struct bf16(u16): 8, 7);
+minifloat!(pub struct F16(u16): 5, 10);
+minifloat!(pub struct BF16(u16): 8, 7);

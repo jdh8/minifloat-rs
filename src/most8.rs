@@ -6,9 +6,9 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use crate::NanStyle;
 use core::cmp::Ordering;
 use core::ops::Neg;
-use crate::NanStyle;
 
 /// IEEE-like minifloat taking at most 8 bits
 ///
