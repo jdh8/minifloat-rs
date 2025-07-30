@@ -193,17 +193,27 @@ macro_rules! select_sized_trait {
     ($($t:tt)*) => {};
 }
 
-/// Define a minifloat taking up to 8 bits
+/// Define a minifloat taking up to 16 bits
 ///
+/// * `$name`: name of the type
+/// * `$bits`: the underlying integer type, which must be [`u8`] or [`u16`]
 /// * `$e`: exponent bit-width
 /// * `$m`: explicit significand (mantissa) bit-width
 /// * `$b`: exponent bias, which defaults to 2<sup>`$e`&minus;1</sup> &minus; 1
-/// * `$n`: NaN encoding style
+/// * `$n`: NaN encoding style, one of the [`NanStyle`] variants
 ///
-/// Constraints:
-/// * `$e` + `$m` < 8 (there is always a sign bit)
+/// ## Constraints
+///
+/// * `$e` + `$m` < 16 (there is always a sign bit)
 /// * `$e` ≥ 2 (or use an integer type instead)
 /// * `$m` > 0 if `$n` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
+/// 
+/// ## Example
+///
+/// ```
+/// use minifloat::minifloat;
+/// minifloat!(pub struct F8E4M3FN(u8): 4, 3, FN);
+/// ``` 
 #[macro_export]
 macro_rules! minifloat {
     ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $b:expr, $n:ident) => {
