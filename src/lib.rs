@@ -70,13 +70,29 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
     -4.402_823_044_177_721_15e-5,
 ];
 
+/// Internal macro to conditionally define infinities
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __conditionally_define_infinities {
+    (impl $name:ident, IEEE) => {
+        impl $name {
+            /// Positive infinity
+            pub const INFINITY: Self = Self::HUGE;
+
+            /// Negative infinity
+            pub const NEG_INFINITY: Self = Self(Self::HUGE.0 | (1 << (Self::E + Self::M)));
+        }
+    };
+    (impl $name:ident, $n:ident) => {};
+}
+
 /// Internal macro to select the correct sized trait implementation
 ///
 /// This macro needs to be public for [`minifloat!`] to invoke, but it is not
 /// intended for general use.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! select_sized_trait {
+macro_rules! __select_sized_trait {
     (u8, $name:ident, $e:expr, $m:expr) => {
         impl $crate::Most8<$m> for $name {
             const E: u32 = Self::E;
@@ -469,7 +485,8 @@ macro_rules! minifloat {
             }
         }
 
-        $crate::select_sized_trait!($bits, $name, $e, $m);
+        $crate::__conditionally_define_infinities!(impl $name, $n);
+        $crate::__select_sized_trait!($bits, $name, $e, $m);
     };
     ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $n:ident) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, $n);

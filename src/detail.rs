@@ -10,6 +10,7 @@
 //!
 //! This module is not considered part of the public API.  Symbols here are
 //! public for macros to work.  They are not meant to be used directly.
+#![doc(hidden)]
 
 /// Fast 2<sup>`x`</sup> with bit manipulation
 #[must_use]
