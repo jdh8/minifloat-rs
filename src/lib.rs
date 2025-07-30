@@ -106,7 +106,8 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
 #[macro_export]
 macro_rules! select_sized_trait {
     (u8, $name:ident, $e:expr, $m:expr) => {
-        impl $crate::Most8<$e, $m> for $name {
+        impl $crate::Most8<$m> for $name {
+            const E: u32 = Self::E;
             const B: i32 = Self::B;
             const N: $crate::NanStyle = Self::N;
 
@@ -132,7 +133,8 @@ macro_rules! select_sized_trait {
         }
     };
     (u16, $name:ident, $e:expr, $m:expr) => {
-        impl $crate::Most16<$e, $m> for $name {
+        impl $crate::Most16<$m> for $name {
+            const E: u32 = Self::E;
             const B: i32 = Self::B;
             const N: $crate::NanStyle = Self::N;
 
