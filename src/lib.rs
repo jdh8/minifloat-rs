@@ -9,6 +9,7 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
+pub mod detail;
 pub mod example;
 mod most16;
 mod most8;
@@ -47,35 +48,6 @@ pub enum NanStyle {
     /// representation is reserved for NaN.  As a result, there is only one
     /// (+0.0) unsigned zero.
     FNUZ,
-}
-
-/// Fast 2<sup>`x`</sup> with bit manipulation
-const fn exp2i(x: i32) -> f64 {
-    f64::from_bits(match 0x3FF + x {
-        0x800.. => 0x7FF << 52,
-        #[allow(clippy::cast_sign_loss)]
-        s @ 1..=0x7FF => (s as u64) << 52,
-        s @ -51..=0 => 1 << (51 + s),
-        _ => 0,
-    })
-}
-
-/// Round `x` to the nearest representable value with `M` bits of precision
-const fn round_f32_to_precision<const M: u32>(x: f32) -> f32 {
-    let x = x.to_bits();
-    let shift = f32::MANTISSA_DIGITS - 1 - M;
-    let ulp = 1 << shift;
-    let bias = (ulp >> 1) - (!(x >> shift) & 1);
-    f32::from_bits((x + bias) & !(ulp - 1))
-}
-
-/// Round `x` to the nearest representable value with `M` bits of precision
-const fn round_f64_to_precision<const M: u32>(x: f64) -> f64 {
-    let x = x.to_bits();
-    let shift = f64::MANTISSA_DIGITS - 1 - M;
-    let ulp = 1 << shift;
-    let bias = (ulp >> 1) - (!(x >> shift) & 1);
-    f64::from_bits((x + bias) & !(ulp - 1))
 }
 
 #[allow(clippy::excessive_precision)]
@@ -390,6 +362,68 @@ macro_rules! minifloat {
                 let sign = 1 << (Self::E + Self::M);
                 let mask = ((x & sign) >> (Self::E + Self::M)) * (sign - 1);
                 x ^ (sign | mask)
+            }
+
+            /// Probably lossy conversion from [`f32`]
+            ///
+            /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+            /// Other values are rounded to the nearest representable value.
+            #[must_use]
+            #[allow(clippy::cast_possible_wrap)]
+            pub fn from_f32(x: f32) -> Self {
+                if x.is_nan() {
+                    let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
+                    return Self::from_bits(Self::NAN.0 | sign_bit);
+                }
+
+                let bits = $crate::detail::round_f32_to_precision::<$m>(x).to_bits();
+                let sign_bit = ((bits >> 31) as $bits) << (Self::E + Self::M);
+                let diff = (Self::MIN_EXP - f32::MIN_EXP) << Self::M;
+                let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - Self::M);
+                let magnitude = magnitude as i32 - diff;
+
+                if magnitude < 1 << Self::M {
+                    let ticks = f64::from(x.abs()) * $crate::detail::exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let ticks = ticks.round_ties_even() as $bits;
+                    return Self::from_bits(
+                        (<$bits>::from(Self::N != $crate::NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks,
+                    );
+                }
+
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                Self::from_bits(magnitude.min(i32::from(Self::HUGE.to_bits())) as $bits | sign_bit)
+            }
+
+            /// Probably lossy conversion from [`f64`]
+            ///
+            /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+            /// Other values are rounded to the nearest representable value.
+            #[must_use]
+            #[allow(clippy::cast_possible_wrap)]
+            pub fn from_f64(x: f64) -> Self {
+                if x.is_nan() {
+                    let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
+                    return Self::from_bits(Self::NAN.to_bits() | sign_bit);
+                }
+
+                let bits = $crate::detail::round_f64_to_precision::<$m>(x).to_bits();
+                let sign_bit = ((bits >> 63) as $bits) << (Self::E + Self::M);
+                let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << Self::M;
+                let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - Self::M);
+                let magnitude = magnitude as i64 - diff;
+
+                if magnitude < 1 << Self::M {
+                    let ticks = x.abs() * $crate::detail::exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let ticks = ticks.round_ties_even() as $bits;
+                    return Self::from_bits(
+                        (<$bits>::from(Self::N != $crate::NanStyle::FNUZ || ticks != 0) * sign_bit) | ticks,
+                    );
+                }
+
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                Self::from_bits(magnitude.min(i64::from(Self::HUGE.to_bits())) as $bits | sign_bit)
             }
         }
 
