@@ -11,20 +11,20 @@
 //! This module only serves as an example.  Its content is subject to change.
 //! This module is not considered part of the public API.
 
-crate::most8!(pub struct F8E3M4(u8): 3, 4);
-crate::most8!(pub struct F8E3M4FN(u8): 3, 4, FN);
+crate::minifloat!(pub struct F8E3M4(u8): 3, 4);
+crate::minifloat!(pub struct F8E3M4FN(u8): 3, 4, FN);
 
-crate::most8!(pub struct F8E4M3(u8): 4, 3);
-crate::most8!(pub struct F8E4M3FN(u8): 4, 3, FN);
-crate::most8!(pub struct F8E4M3FNUZ(u8): 4, 3, FNUZ);
+crate::minifloat!(pub struct F8E4M3(u8): 4, 3);
+crate::minifloat!(pub struct F8E4M3FN(u8): 4, 3, FN);
+crate::minifloat!(pub struct F8E4M3FNUZ(u8): 4, 3, FNUZ);
 
-crate::most8!(pub struct F8E4M3B11(u8): 4, 3, 11);
-crate::most8!(pub struct F8E4M3B11FN(u8): 4, 3, 11, FN);
-crate::most8!(pub struct F8E4M3B11FNUZ(u8): 4, 3, 11, FNUZ);
+crate::minifloat!(pub struct F8E4M3B11(u8): 4, 3, 11);
+crate::minifloat!(pub struct F8E4M3B11FN(u8): 4, 3, 11, FN);
+crate::minifloat!(pub struct F8E4M3B11FNUZ(u8): 4, 3, 11, FNUZ);
 
-crate::most8!(pub struct F8E5M2(u8): 5, 2);
-crate::most8!(pub struct F8E5M2FNUZ(u8): 5, 2, FNUZ);
+crate::minifloat!(pub struct F8E5M2(u8): 5, 2);
+crate::minifloat!(pub struct F8E5M2FNUZ(u8): 5, 2, FNUZ);
 
-crate::most8!(pub struct F6E3M2FN(u8): 3, 2, FN);
-crate::most8!(pub struct F6E2M3FN(u8): 2, 3, FN);
-crate::most8!(pub struct F4E2M1FN(u8): 2, 1, FN);
+crate::minifloat!(pub struct F6E3M2FN(u8): 3, 2, FN);
+crate::minifloat!(pub struct F6E2M3FN(u8): 2, 3, FN);
+crate::minifloat!(pub struct F4E2M1FN(u8): 2, 1, FN);
