@@ -10,9 +10,11 @@
 #![warn(missing_docs)]
 
 pub mod example;
+mod most16;
 mod most8;
 
 use core::f64::consts::LOG10_2;
+pub use most16::Most16;
 pub use most8::Most8;
 
 /// NaN encoding style
@@ -96,67 +98,6 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
     -4.402_823_044_177_721_15e-5,
 ];
 
-macro_rules! define_f64_from {
-    ($name:ident, $f:ty) => {
-        fn $name(x: $f) -> f64 {
-            let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
-            let magnitude = x.0 & <$f>::ABS_MASK;
-
-            if x.is_nan() {
-                return f64::NAN.copysign(sign);
-            }
-            if x.is_infinite() {
-                return f64::INFINITY * sign;
-            }
-            if magnitude < 1 << M {
-                #[allow(clippy::cast_possible_wrap)]
-                let shift = <$f>::MIN_EXP - <$f>::MANTISSA_DIGITS as i32;
-                return exp2i(shift) * sign * f64::from(magnitude);
-            }
-            let shift = f64::MANTISSA_DIGITS - <$f>::MANTISSA_DIGITS;
-            #[allow(clippy::cast_sign_loss)]
-            let diff = (<$f>::MIN_EXP - f64::MIN_EXP) as u64;
-            let diff = diff << (f64::MANTISSA_DIGITS - 1);
-            let sign = u64::from(x.is_sign_negative()) << 63;
-            f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
-        }
-    };
-}
-
-/*
-fn as_f64<const E: u32, const M: u32>(x: Most16<E, M>) -> f64 {
-    let bias = (1 << (E - 1)) - 1;
-    let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
-    let magnitude = x.abs().to_bits();
-
-    if x.is_nan() {
-        return f64::NAN.copysign(sign);
-    }
-    if x.is_infinite() {
-        return f64::INFINITY * sign;
-    }
-    if i32::from(magnitude) >= (f64::MAX_EXP + bias) << M {
-        return f64::INFINITY * sign;
-    }
-    if magnitude < 1 << M {
-        #[allow(clippy::cast_possible_wrap)]
-        let shift = Most16::<E, M>::MIN_EXP - Most16::<E, M>::MANTISSA_DIGITS as i32;
-        return exp2i(shift) * sign * f64::from(magnitude);
-    }
-    if i32::from(magnitude >> M) < f64::MIN_EXP + bias {
-        let significand = (magnitude & ((1 << M) - 1)) | 1 << M;
-        let exponent = i32::from(magnitude >> M) - bias;
-        #[allow(clippy::cast_possible_wrap)]
-        return exp2i(exponent - M as i32) * sign * f64::from(significand);
-    }
-    let shift = f64::MANTISSA_DIGITS - Most16::<E, M>::MANTISSA_DIGITS;
-    #[allow(clippy::cast_sign_loss)]
-    let diff = (Most16::<E, M>::MIN_EXP - f64::MIN_EXP) as u64;
-    let diff = diff << (f64::MANTISSA_DIGITS - 1);
-    let sign = u64::from(x.is_sign_negative()) << 63;
-    f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
-} // */
-
 /// Internal macro to select the correct sized trait implementation
 ///
 /// This macro needs to be public for [`minifloat!`] to invoke, but it is not
@@ -190,7 +131,32 @@ macro_rules! select_sized_trait {
             }
         }
     };
-    ($($t:tt)*) => {};
+    (u16, $name:ident, $e:expr, $m:expr) => {
+        impl $crate::Most16<$e, $m> for $name {
+            const B: i32 = Self::B;
+            const N: $crate::NanStyle = Self::N;
+
+            const NAN: Self = Self::NAN;
+            const HUGE: Self = Self::HUGE;
+            const MAX: Self = Self::MAX;
+            const TINY: Self = Self::TINY;
+            const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+            const EPSILON: Self = Self::EPSILON;
+            const MIN: Self = Self::MIN;
+
+            fn from_bits(v: u16) -> Self {
+                Self::from_bits(v)
+            }
+
+            fn to_bits(self) -> u16 {
+                self.to_bits()
+            }
+
+            fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+                Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
+            }
+        }
+    };
 }
 
 /// Define a minifloat taking up to 16 bits
@@ -207,13 +173,13 @@ macro_rules! select_sized_trait {
 /// * `$e` + `$m` < 16 (there is always a sign bit)
 /// * `$e` ≥ 2 (or use an integer type instead)
 /// * `$m` > 0 if `$n` is [`IEEE`][NanStyle::IEEE] (∞ ≠ NaN)
-/// 
+///
 /// ## Example
 ///
 /// ```
 /// use minifloat::minifloat;
 /// minifloat!(pub struct F8E4M3FN(u8): 4, 3, FN);
-/// ``` 
+/// ```
 #[macro_export]
 macro_rules! minifloat {
     ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $b:expr, $n:ident) => {
@@ -392,6 +358,15 @@ macro_rules! minifloat {
                         (_, _) => core::num::FpCategory::Normal,
                     }
                 }
+            }
+
+            /// Compute the absolute value
+            #[must_use]
+            pub const fn abs(self) -> Self {
+                if matches!(Self::N, $crate::NanStyle::FNUZ) && self.0 == Self::NAN.0 {
+                    return Self::NAN;
+                }
+                Self::from_bits(self.to_bits() & Self::ABS_MASK)
             }
 
             /// Check if the sign bit is clear
