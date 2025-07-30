@@ -308,4 +308,28 @@ pub trait Most8<const E: u32, const M: u32>:
         let sign = u32::from(self.is_sign_negative()) << 31;
         f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
     }
+
+    /// Lossless conversion to [`f64`]
+    fn to_f64(self) -> f64 {
+        let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
+        let magnitude = self.to_bits() & Self::ABS_MASK;
+
+        if self.is_nan() {
+            return f64::NAN.copysign(sign);
+        }
+        if self.is_infinite() {
+            return f64::INFINITY * sign;
+        }
+        if magnitude < 1 << M {
+            #[allow(clippy::cast_possible_wrap)]
+            let shift = Self::MIN_EXP - Self::MANTISSA_DIGITS as i32;
+            return crate::exp2i(shift) * sign * f64::from(magnitude);
+        }
+        let shift = f64::MANTISSA_DIGITS - Self::MANTISSA_DIGITS;
+        #[allow(clippy::cast_sign_loss)]
+        let diff = (Self::MIN_EXP - f64::MIN_EXP) as u64;
+        let diff = diff << (f64::MANTISSA_DIGITS - 1);
+        let sign = u64::from(self.is_sign_negative()) << 63;
+        f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
+    }
 }
