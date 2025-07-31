@@ -228,37 +228,3 @@ pub trait Most16<const M: u32>: Sized + Copy + PartialEq + PartialOrd + Neg<Outp
         self.to_bits() >> (Self::E + Self::M) & 1 == 1
     }
 }
-
-/// Lossy conversion to [`f64`]
-fn as_f64<const M: u32, T: Most16<M>>(x: T) -> f64 {
-    let bias = (1 << (T::E - 1)) - 1;
-    let sign = if x.is_sign_negative() { -1.0 } else { 1.0 };
-    let magnitude = x.abs().to_bits();
-
-    if x.is_nan() {
-        return f64::NAN.copysign(sign);
-    }
-    if x.is_infinite() {
-        return f64::INFINITY * sign;
-    }
-    if i32::from(magnitude) >= (f64::MAX_EXP + bias) << M {
-        return f64::INFINITY * sign;
-    }
-    if magnitude < 1 << M {
-        #[allow(clippy::cast_possible_wrap)]
-        let shift = T::MIN_EXP - T::MANTISSA_DIGITS as i32;
-        return crate::detail::exp2i(shift) * sign * f64::from(magnitude);
-    }
-    if i32::from(magnitude >> M) < f64::MIN_EXP + bias {
-        let significand = (magnitude & ((1 << M) - 1)) | 1 << M;
-        let exponent = i32::from(magnitude >> M) - bias;
-        #[allow(clippy::cast_possible_wrap)]
-        return crate::detail::exp2i(exponent - M as i32) * sign * f64::from(significand);
-    }
-    let shift = f64::MANTISSA_DIGITS - T::MANTISSA_DIGITS;
-    #[allow(clippy::cast_sign_loss)]
-    let diff = (T::MIN_EXP - f64::MIN_EXP) as u64;
-    let diff = diff << (f64::MANTISSA_DIGITS - 1);
-    let sign = u64::from(x.is_sign_negative()) << 63;
-    f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
-}
