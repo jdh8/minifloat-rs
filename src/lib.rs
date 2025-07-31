@@ -11,12 +11,10 @@
 
 pub mod detail;
 pub mod example;
-mod most16;
-mod most8;
 
+use core::cmp::Ordering;
 use core::f64::consts::LOG10_2;
-pub use most16::Most16;
-pub use most8::Most8;
+use core::ops::Neg;
 
 /// NaN encoding style
 ///
@@ -69,6 +67,179 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
     -8.805_780_458_002_638_34e-5,
     -4.402_823_044_177_721_15e-5,
 ];
+
+pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
+    /// Storage type
+    type Bits;
+
+    /// Whether the type is signed
+    const S: bool = true;
+
+    /// Exponent bit-width
+    const E: u32;
+
+    /// Significand (mantissa) precision
+    const M: u32;
+
+    /// Exponent bias
+    const B: i32 = (1 << (Self::E - 1)) - 1;
+
+    /// NaN encoding style
+    const N: NanStyle = NanStyle::IEEE;
+
+    /// Total bitwidth
+    const BITWIDTH: u32 = Self::S as u32 + Self::E + Self::M;
+
+    /// The radix of the internal representation
+    const RADIX: u32 = 2;
+
+    /// The number of digits in the significand, including the implicit leading bit
+    ///
+    /// Equal to `M` + 1
+    const MANTISSA_DIGITS: u32 = Self::M + 1;
+
+    /// The maximum exponent
+    ///
+    /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
+    const MAX_EXP: i32 = (1 << Self::E)
+        - Self::B
+        - match Self::N {
+            NanStyle::IEEE => 1,
+            NanStyle::FN => (Self::M == 0) as i32,
+            NanStyle::FNUZ => 0,
+        };
+
+    /// One greater than the minimum normal exponent
+    ///
+    /// Normal numbers ≥ 0.5 &times; 2<sup>`MIN_EXP`</sup>.
+    ///
+    /// This quirk comes from C macros `FLT_MIN_EXP` and friends.  However, it
+    /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
+    /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
+    /// interpreted as normal or subnormal.
+    const MIN_EXP: i32 = 2 - Self::B;
+
+    /// Approximate number of significant decimal digits
+    ///
+    /// Equal to floor([`M`][Self::M] log<sub>10</sub>(2))
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    const DIGITS: u32 = (Self::M as f64 * crate::LOG10_2) as u32;
+
+    /// Maximum <var>x</var> such that 10<sup>`x`</sup> is normal
+    ///
+    /// Equal to floor(log<sub>10</sub>([`MAX`][Self::MAX]))
+    #[allow(clippy::cast_possible_truncation)]
+    const MAX_10_EXP: i32 = {
+        let exponent = (1 << Self::E) - Self::B - matches!(Self::N, NanStyle::IEEE) as i32;
+        let precision = Self::M + !matches!(Self::N, NanStyle::FN) as u32;
+        let log2_max = exponent as f64 + crate::LOG2_SIGNIFICAND[precision as usize];
+        (log2_max * crate::LOG10_2) as i32
+    };
+
+    /// Minimum <var>x</var> such that 10<sup>`x`</sup> is normal
+    ///
+    /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
+    #[allow(clippy::cast_possible_truncation)]
+    const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * crate::LOG10_2) as i32;
+
+    /// One representation of NaN
+    const NAN: Self;
+
+    /// The largest number of this type
+    ///
+    /// This value would be +∞ if the type has infinities.  Otherwise, it is
+    /// the maximum finite representation.  This value is also the result of
+    /// a positive overflow.
+    const HUGE: Self;
+
+    /// The maximum finite number
+    const MAX: Self;
+
+    /// The smallest positive (subnormal) number
+    const TINY: Self;
+
+    /// The smallest positive normal number
+    ///
+    /// Equal to 2<sup>[`MIN_EXP`][Self::MIN_EXP]&minus;1</sup>
+    const MIN_POSITIVE: Self;
+
+    /// [Machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon)
+    ///
+    /// The difference between 1.0 and the next larger representable number.
+    ///
+    /// Equal to 2<sup>&minus;`M`</sup>.
+    const EPSILON: Self;
+
+    /// The minimum finite number
+    ///
+    /// Equal to &minus;[`MAX`][Self::MAX]
+    const MIN: Self;
+
+    /// Raw transmutation from [`Self::Bits`]
+    #[must_use]
+    fn from_bits(v: Self::Bits) -> Self;
+
+    /// Raw transmutation to [`Self::Bits`]
+    #[must_use]
+    fn to_bits(self) -> Self::Bits;
+
+    /// IEEE 754 total-ordering predicate
+    ///
+    /// The normative definition is lengthy, but it is essentially comparing
+    /// sign-magnitude notations.
+    ///
+    /// See also [`f32::total_cmp`],
+    /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
+    #[must_use]
+    fn total_cmp(&self, other: &Self) -> Ordering;
+
+    /// Check if the value is NaN
+    #[must_use]
+    fn is_nan(self) -> bool;
+
+    /// Check if the value is positive or negative infinity
+    #[must_use]
+    fn is_infinite(self) -> bool;
+
+    /// Check if the value is finite, i.e. neither infinite nor NaN
+    #[must_use]
+    fn is_finite(self) -> bool;
+
+    /// Check if the value is [subnormal]
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
+    #[must_use]
+    fn is_subnormal(self) -> bool {
+        matches!(self.classify(), core::num::FpCategory::Subnormal)
+    }
+
+    /// Check if the value is normal, i.e. not zero, [subnormal], infinite, or NaN
+    ///
+    /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
+    #[must_use]
+    fn is_normal(self) -> bool {
+        matches!(self.classify(), core::num::FpCategory::Normal)
+    }
+
+    /// Classify the value into a floating-point category
+    ///
+    /// If only one property is going to be tested, it is generally faster to
+    /// use the specific predicate instead.
+    #[must_use]
+    fn classify(self) -> core::num::FpCategory;
+
+    /// Compute the absolute value
+    #[must_use]
+    fn abs(self) -> Self;
+
+    /// Check if the sign bit is clear
+    #[must_use]
+    fn is_sign_positive(self) -> bool;
+
+    /// Check if the sign bit is set
+    #[must_use]
+    fn is_sign_negative(self) -> bool;
+}
 
 /// Internal macro to conditionally define infinities
 #[doc(hidden)]
@@ -608,8 +779,63 @@ macro_rules! minifloat {
             }
         }
 
+        impl $crate::Minifloat for $name {
+            type Bits = $bits;
+            const E: u32 = $e;
+            const M: u32 = $m;
+            const B: i32 = $b;
+            const N: $crate::NanStyle = $crate::NanStyle::$n;
+
+            const NAN: Self = Self::NAN;
+            const HUGE: Self = Self::HUGE;
+            const MAX: Self = Self::MAX;
+            const TINY: Self = Self::TINY;
+            const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
+            const EPSILON: Self = Self::EPSILON;
+            const MIN: Self = Self::MIN;
+
+            fn from_bits(v: Self::Bits) -> Self {
+                Self::from_bits(v)
+            }
+
+            fn to_bits(self) -> Self::Bits {
+                self.to_bits()
+            }
+
+            fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+                Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
+            }
+
+            fn is_nan(self) -> bool {
+                self.is_nan()
+            }
+
+            fn is_infinite(self) -> bool {
+                self.is_infinite()
+            }
+
+            fn is_finite(self) -> bool {
+                self.is_finite()
+            }
+
+            fn classify(self) -> core::num::FpCategory {
+                self.classify()
+            }
+
+            fn abs(self) -> Self {
+                self.abs()
+            }
+
+            fn is_sign_positive(self) -> bool {
+                self.is_sign_positive()
+            }
+
+            fn is_sign_negative(self) -> bool {
+                self.is_sign_negative()
+            }
+        }
+
         $crate::__conditionally_define_infinities!(impl $name, $n);
-        $crate::__select_sized_trait!($bits, $name, $e, $m);
     };
     ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $n:ident) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, $n);
