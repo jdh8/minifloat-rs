@@ -11,5 +11,5 @@ configurable, including
 
 - Exponent width
 - Significand (mantissa) precision
-- Exponent bias for types up to 8 bits
-- NaN encodings for types up to 8 bits: IEEE, FN, or FNUZ
+- Exponent bias
+- NaN encodings: IEEE, FN, or FNUZ

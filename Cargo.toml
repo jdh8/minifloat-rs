@@ -1,16 +1,16 @@
 [package]
 name = "minifloat"
-version = "0.2.0-dev"
+version = "0.2.0"
 authors = ["Chen-Pang He (https://jdh8.org)"]
 edition = "2021"
-description = "Emulate various minifloats with const generics"
+description = "Emulate various minifloats"
 repository = "https://github.com/jdh8/minifloat-rs"
 license = "MPL-2.0"
 categories = ["mathematics", "data-structures"]
-keywords = ["minifloat", "f16", "bfloat16", "const-generics"]
+keywords = ["minifloat", "f16", "bfloat16"]
 
 [dev-dependencies]
-libm = "0.2.8"
+libm = "0.2.15"
 
 [dependencies]
 num-traits = "0.2.19"

@@ -68,6 +68,16 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
     -4.402_823_044_177_721_15e-5,
 ];
 
+/// Generic trait for minifloat types
+///
+/// I am **not** going to implement [`num_traits::Float`][flt] because:
+///
+/// 1. [`FN`][NanStyle::FN] and [`FNUZ`][NanStyle::FNUZ] types do not have infinities.
+/// 2. [`FNUZ`][NanStyle::FNUZ] types do not have a negative zero.
+/// 3. I don't have plans for [arithmetic operations][ops] yet.
+///
+/// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
+/// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
 pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Storage type
     type Bits;
