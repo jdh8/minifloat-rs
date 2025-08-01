@@ -81,7 +81,7 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
 /// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
 pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Storage type
-    type Bits: PrimInt + Unsigned;
+    type Bits: PrimInt + Unsigned + 'static;
 
     /// Whether the type is signed
     const S: bool = true;
