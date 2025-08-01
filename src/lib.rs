@@ -250,6 +250,28 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Check if the sign bit is set
     #[must_use]
     fn is_sign_negative(self) -> bool;
+
+    /// Probably lossy conversion from [`f32`]
+    ///
+    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+    /// Other values are rounded to the nearest representable value.
+    #[must_use]
+    fn from_f32(x: f32) -> Self;
+
+    /// Probably lossy conversion from [`f64`]
+    ///
+    /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
+    /// Other values are rounded to the nearest representable value.
+    #[must_use]
+    fn from_f64(x: f64) -> Self;
+
+    /// Best effort conversion to [`f32`]
+    #[must_use]
+    fn to_f32(self) -> f32;
+
+    /// Best effort conversion to [`f64`]
+    #[must_use]
+    fn to_f64(self) -> f64;
 }
 
 /// Internal macro to conditionally define infinities
@@ -779,6 +801,22 @@ macro_rules! minifloat {
 
             fn is_sign_negative(self) -> bool {
                 self.is_sign_negative()
+            }
+
+            fn from_f32(x: f32) -> Self {
+                Self::from_f32(x)
+            }
+
+            fn from_f64(x: f64) -> Self {
+                Self::from_f64(x)
+            }
+
+            fn to_f32(self) -> f32 {
+                Self::to_f32(self)
+            }
+
+            fn to_f64(self) -> f64 {
+                Self::to_f64(self)
             }
         }
 
