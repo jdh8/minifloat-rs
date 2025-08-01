@@ -267,69 +267,6 @@ macro_rules! __conditionally_define_infinities {
     (impl $name:ident, $n:ident) => {};
 }
 
-/// Internal macro to select the correct sized trait implementation
-///
-/// This macro needs to be public for [`minifloat!`] to invoke, but it is not
-/// intended for general use.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __select_sized_trait {
-    (u8, $name:ident, $e:expr, $m:expr) => {
-        impl $crate::Most8<$m> for $name {
-            const E: u32 = Self::E;
-            const B: i32 = Self::B;
-            const N: $crate::NanStyle = Self::N;
-
-            const NAN: Self = Self::NAN;
-            const HUGE: Self = Self::HUGE;
-            const MAX: Self = Self::MAX;
-            const TINY: Self = Self::TINY;
-            const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
-            const EPSILON: Self = Self::EPSILON;
-            const MIN: Self = Self::MIN;
-
-            fn from_bits(v: u8) -> Self {
-                Self::from_bits(v)
-            }
-
-            fn to_bits(self) -> u8 {
-                self.to_bits()
-            }
-
-            fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
-                Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
-            }
-        }
-    };
-    (u16, $name:ident, $e:expr, $m:expr) => {
-        impl $crate::Most16<$m> for $name {
-            const E: u32 = Self::E;
-            const B: i32 = Self::B;
-            const N: $crate::NanStyle = Self::N;
-
-            const NAN: Self = Self::NAN;
-            const HUGE: Self = Self::HUGE;
-            const MAX: Self = Self::MAX;
-            const TINY: Self = Self::TINY;
-            const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
-            const EPSILON: Self = Self::EPSILON;
-            const MIN: Self = Self::MIN;
-
-            fn from_bits(v: u16) -> Self {
-                Self::from_bits(v)
-            }
-
-            fn to_bits(self) -> u16 {
-                self.to_bits()
-            }
-
-            fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
-                Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
-            }
-        }
-    };
-}
-
 /// Configure a (signed) minifloat
 ///
 /// * `$name`: name of the type
