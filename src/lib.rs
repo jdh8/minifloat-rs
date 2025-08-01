@@ -298,7 +298,6 @@ macro_rules! minifloat {
         const _: () = assert!($name::MAX_EXP >= 1);
         const _: () = assert!($name::MIN_EXP <= 1);
 
-        #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         #[derive(Debug, Clone, Copy, Default)]
         $vis struct $name($bits);
