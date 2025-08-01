@@ -15,6 +15,7 @@ pub mod example;
 use core::cmp::Ordering;
 use core::f64::consts::LOG10_2;
 use core::ops::Neg;
+use num_traits::{PrimInt, Unsigned};
 
 /// NaN encoding style
 ///
@@ -80,7 +81,7 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
 /// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
 pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Storage type
-    type Bits;
+    type Bits: PrimInt + Unsigned;
 
     /// Whether the type is signed
     const S: bool = true;
@@ -291,7 +292,6 @@ macro_rules! __conditionally_define_infinities {
 #[macro_export]
 macro_rules! minifloat {
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $n:ident) => {
-        const _: () = assert!(<$bits>::MIN == 0);
         const _: () = assert!($name::BITWIDTH <= <$bits>::BITS);
         const _: () = assert!($name::E >= 2);
         const _: () = assert!($name::M > 0 || !matches!($name::N, $crate::NanStyle::IEEE));
