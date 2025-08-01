@@ -330,10 +330,10 @@ macro_rules! __select_sized_trait {
     };
 }
 
-/// Define a minifloat taking up to 16 bits
+/// Configure a (signed) minifloat
 ///
 /// * `$name`: name of the type
-/// * `$bits`: the underlying integer type, which must be [`u8`] or [`u16`]
+/// * `$bits`: the underlying unsigned integer, usually [`u8`] or [`u16`]
 /// * `$e`: exponent bit-width
 /// * `$m`: explicit significand (mantissa) bit-width
 /// * `$b`: exponent bias, which defaults to 2<sup>`$e`&minus;1</sup> &minus; 1
@@ -354,6 +354,13 @@ macro_rules! __select_sized_trait {
 #[macro_export]
 macro_rules! minifloat {
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $n:ident) => {
+        const _: () = assert!(<$bits>::MIN == 0);
+        const _: () = assert!($name::BITWIDTH <= <$bits>::BITS);
+        const _: () = assert!($name::E >= 2);
+        const _: () = assert!($name::M > 0 || !matches!($name::N, $crate::NanStyle::IEEE));
+        const _: () = assert!($name::MAX_EXP >= 1);
+        const _: () = assert!($name::MIN_EXP <= 1);
+
         #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         #[derive(Debug, Clone, Copy, Default)]
@@ -746,12 +753,6 @@ macro_rules! minifloat {
                 return self.to_f64() as f32;
             }
         }
-
-        const _: () = assert!($name::BITWIDTH <= 16);
-        const _: () = assert!($name::E >= 2);
-        const _: () = assert!($name::M > 0 || !matches!($name::N, $crate::NanStyle::IEEE));
-        const _: () = assert!($name::MAX_EXP >= 1);
-        const _: () = assert!($name::MIN_EXP <= 1);
 
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
