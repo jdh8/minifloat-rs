@@ -353,7 +353,7 @@ macro_rules! __select_sized_trait {
 /// ```
 #[macro_export]
 macro_rules! minifloat {
-    ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $b:expr, $n:ident) => {
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $n:ident) => {
         #[allow(non_camel_case_types)]
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m)]
         #[derive(Debug, Clone, Copy, Default)]
@@ -458,7 +458,7 @@ macro_rules! minifloat {
             #[doc = concat!("Raw transmutation from [`", stringify!($bits), "`]")]
             #[must_use]
             pub const fn from_bits(v: $bits) -> Self {
-                Self($bits::MAX >> ($bits::BITS - Self::BITWIDTH) & v)
+                Self(<$bits>::MAX >> (<$bits>::BITS - Self::BITWIDTH) & v)
             }
 
             #[doc = concat!("Raw transmutation to [`", stringify!($bits), "`]")]
@@ -847,13 +847,13 @@ macro_rules! minifloat {
 
         $crate::__conditionally_define_infinities!(impl $name, $n);
     };
-    ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $n:ident) => {
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $n:ident) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, $n);
     };
-    ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr, $b:expr) => {
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, $b, IEEE);
     };
-    ($vis:vis struct $name:ident($bits:tt): $e:expr, $m:expr) => {
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, IEEE);
     };
 }
