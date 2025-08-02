@@ -116,9 +116,12 @@ fn test_eq() {
             let fixed_point = f64::from(fixed_point);
             assert!(same_f64(T::from_f64(fixed_point).to_f64(), fixed_point));
 
-            assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
+            assert!(T::ZERO.to_bits() == 0.as_());
+            assert_eq!(T::ZERO, T::from_f32(0.0));
+            assert_eq!(T::ZERO, T::from_f32(-0.0));
+
             assert_eq!(
-                same_mini(T::from_f32(0.0), T::from_f32(-0.0)),
+                same_mini(T::ZERO, T::from_f32(-0.0)),
                 T::N == NanStyle::FNUZ
             );
 
@@ -184,4 +187,50 @@ fn test_classify() {
         }
     }
     CheckClassify::test();
+}
+
+#[test]
+fn test_to_f32() {
+    struct CheckToF32;
+    impl Check for CheckToF32 {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            assert!(same_f32(T::ZERO.to_f32(), 0.0));
+            assert!(same_f32((-T::ZERO).to_f32(), if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }));
+            for_all::<T>(|x| same_mini(T::from_f32(x.to_f32()), x))
+        }
+    }
+    CheckToF32::test();
+}
+
+#[test]
+fn test_to_f64() {
+    struct CheckToF64;
+    impl Check for CheckToF64 {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            assert!(same_f64(T::ZERO.to_f64(), 0.0));
+            assert!(same_f64((-T::ZERO).to_f64(), if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }));
+            for_all::<T>(|x| same_mini(T::from_f64(x.to_f64()), x))
+        }
+    }
+    CheckToF64::test();
+}
+
+#[test]
+fn test_to_floats() {
+    struct CheckToFloats;
+    impl Check for CheckToFloats {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            for_all::<T>(|x| same_f64(x.to_f32().into(), x.to_f64()))
+        }
+    }
+    CheckToFloats::test();
 }
