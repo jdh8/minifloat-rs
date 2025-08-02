@@ -10,11 +10,19 @@ minifloat!(struct F8E2M5FNUZ(u8): 2, 5, FNUZ);
 minifloat!(struct F8E3M4FNUZ(u8): 3, 4, FNUZ);
 minifloat!(struct F8E5M2FN(u8): 5, 2, FN);
 
-const fn bit_mask(width: u32) -> u64 {
+/// Bitmask returned by [`bit_mask`]
+///
+/// This type must be an unsigned integer.
+type Mask = u64;
+
+/// Create a bitmask of the given width
+const fn bit_mask(width: u32) -> Mask {
+    assert!(width <= Mask::BITS);
+
     if width == 0 {
         0
     } else {
-        u64::MAX >> (64 - width)
+        Mask::MAX >> (Mask::BITS - width)
     }
 }
 
@@ -41,16 +49,17 @@ fn same_mini<T: Minifloat>(x: T, y: T) -> bool {
     x.to_bits() == y.to_bits() || x.is_nan() && y.is_nan()
 }
 
+/// Iterate over all representations in a [`Minifloat`]
 fn for_all<T: Minifloat>(f: impl Fn(T) -> bool) -> bool
 where
-    u64: AsPrimitive<T::Bits>,
+    Mask: AsPrimitive<T::Bits>,
 {
     (0..=bit_mask(T::BITWIDTH)).all(|bits| f(T::from_bits(bits.as_())))
 }
 
 fn check_equality<T: Minifloat + Debug>() -> bool
 where
-    u64: AsPrimitive<T::Bits>,
+    Mask: AsPrimitive<T::Bits>,
 {
     let fixed_point = if T::M == 0 { 2.0 } else { 3.0 };
     assert!(same_f32(T::from_f32(fixed_point).to_f32(), fixed_point));
