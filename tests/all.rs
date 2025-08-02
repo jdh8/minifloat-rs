@@ -6,10 +6,13 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use core::fmt::Debug;
 use minifloat::example::*;
 use minifloat::{minifloat, Minifloat, NanStyle};
+
 use num_traits::AsPrimitive;
+
+use core::fmt::Debug;
+use core::num::FpCategory;
 
 minifloat!(struct F8E2M5(u8): 2, 5);
 minifloat!(struct F8E2M5FN(u8): 2, 5, FN);
@@ -100,7 +103,7 @@ trait Check {
 }
 
 #[test]
-fn test_equality() {
+fn test_eq() {
     struct CheckEq;
     impl Check for CheckEq {
         fn check<T: Minifloat + Debug>() -> bool
@@ -130,4 +133,55 @@ fn test_equality() {
         }
     }
     CheckEq::test();
+}
+
+#[test]
+fn test_neg() {
+    struct CheckNeg;
+    impl Check for CheckNeg {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            for_all::<T>(|x| x.to_bits() == (-(-x)).to_bits())
+        }
+    }
+    CheckNeg::test();
+}
+
+#[test]
+fn test_partial_cmp() {
+    struct CheckOrd;
+    impl Check for CheckOrd {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            for_all::<T>(|x| {
+                for_all::<T>(|y| x.partial_cmp(&y) == x.to_f32().partial_cmp(&y.to_f32()))
+            })
+        }
+    }
+    CheckOrd::test();
+}
+
+#[test]
+fn test_classify() {
+    struct CheckClassify;
+    impl Check for CheckClassify {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            for_all::<T>(|x| {
+                u32::from(x.is_nan()) << FpCategory::Nan as u8
+                    | u32::from(x.is_infinite()) << FpCategory::Infinite as u8
+                    | u32::from(x.is_normal()) << FpCategory::Normal as u8
+                    | u32::from(x.is_subnormal()) << FpCategory::Subnormal as u8
+                    | u32::from(x == T::from_bits(0.as_())) << FpCategory::Zero as u8
+                    == 1 << x.classify() as u8
+            })
+        }
+    }
+    CheckClassify::test();
 }
