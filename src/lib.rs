@@ -166,6 +166,11 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// The maximum finite number
     const MAX: Self;
 
+    /// The unsigned zero
+    ///
+    /// This value is useful because we cannot write `0.0` like built-in types.
+    const ZERO: Self;
+
     /// The smallest positive (subnormal) number
     const TINY: Self;
 
@@ -391,6 +396,9 @@ macro_rules! minifloat {
 
             /// The maximum finite number
             pub const MAX: Self = Self(Self::HUGE.0 - matches!(Self::N, $crate::NanStyle::IEEE) as $bits);
+
+            /// The unsigned zero
+            pub const ZERO: Self = Self(0);
 
             /// The smallest positive (subnormal) number
             pub const TINY: Self = Self(1);
@@ -758,6 +766,8 @@ macro_rules! minifloat {
             const NAN: Self = Self::NAN;
             const HUGE: Self = Self::HUGE;
             const MAX: Self = Self::MAX;
+
+            const ZERO: Self = Self::ZERO;
             const TINY: Self = Self::TINY;
             const MIN_POSITIVE: Self = Self::MIN_POSITIVE;
             const EPSILON: Self = Self::EPSILON;
