@@ -1,3 +1,11 @@
+// This file is part of the minifloat project.
+//
+// Copyright (C) 2025 Chen-Pang He <jdh8@skymizer.com>
+//
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use core::fmt::Debug;
 use minifloat::example::*;
 use minifloat::{minifloat, Minifloat, NanStyle};
@@ -22,7 +30,7 @@ const fn bit_mask(width: u32) -> Mask {
     if width == 0 {
         0
     } else {
-        Mask::MAX >> (Mask::BITS - width)
+        !0 >> (Mask::BITS - width)
     }
 }
 
@@ -49,7 +57,7 @@ fn same_mini<T: Minifloat>(x: T, y: T) -> bool {
     x.to_bits() == y.to_bits() || x.is_nan() && y.is_nan()
 }
 
-/// Iterate over all representations in a [`Minifloat`]
+/// Iterate over all representations of a minifloat type
 fn for_all<T: Minifloat>(f: impl Fn(T) -> bool) -> bool
 where
     Mask: AsPrimitive<T::Bits>,
@@ -57,51 +65,71 @@ where
     (0..=bit_mask(T::BITWIDTH)).all(|bits| f(T::from_bits(bits.as_())))
 }
 
-fn check_equality<T: Minifloat + Debug>() -> bool
-where
-    Mask: AsPrimitive<T::Bits>,
-{
-    let fixed_point = if T::M == 0 { 2.0 } else { 3.0 };
-    assert!(same_f32(T::from_f32(fixed_point).to_f32(), fixed_point));
+/// Wrapper trait for checking properties of minifloats
+///
+/// This trait helps building generic test infrastructure.  Opposed to generic
+/// functions, traits can work as parameters.
+trait Check {
+    /// Check properties of a minifloat type
+    fn check<T: Minifloat + Debug>() -> bool
+    where
+        Mask: AsPrimitive<T::Bits>;
 
-    let fixed_point = f64::from(fixed_point);
-    assert!(same_f64(T::from_f64(fixed_point).to_f64(), fixed_point));
+    /// Test typical minifloats
+    fn test() {
+        assert!(Self::check::<F8E2M5>());
+        assert!(Self::check::<F8E2M5FN>());
+        assert!(Self::check::<F8E2M5FNUZ>());
 
-    assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
-    assert_eq!(
-        same_mini(T::from_f32(0.0), T::from_f32(-0.0)),
-        T::N == NanStyle::FNUZ
-    );
+        assert!(Self::check::<F8E3M4>());
+        assert!(Self::check::<F8E3M4FN>());
+        assert!(Self::check::<F8E3M4FNUZ>());
 
-    assert!(T::NAN.is_nan());
-    assert!(T::from_f32(f32::NAN).is_nan());
-    assert!(T::from_f64(f64::NAN).is_nan());
+        assert!(Self::check::<F8E4M3>());
+        assert!(Self::check::<F8E4M3FN>());
+        assert!(Self::check::<F8E4M3FNUZ>());
 
-    assert!(T::NAN.ne(&T::NAN));
-    assert!(same_mini(T::NAN, T::NAN));
+        assert!(Self::check::<F8E4M3B11>());
+        assert!(Self::check::<F8E4M3B11FN>());
+        assert!(Self::check::<F8E4M3B11FNUZ>());
 
-    for_all::<T>(|x| x.ne(&x) == x.is_nan())
+        assert!(Self::check::<F8E5M2>());
+        assert!(Self::check::<F8E5M2FN>());
+        assert!(Self::check::<F8E5M2FNUZ>());
+    }
+}
+
+struct CheckEquality;
+
+impl Check for CheckEquality {
+    fn check<T: Minifloat + Debug>() -> bool
+    where
+        Mask: AsPrimitive<T::Bits>,
+    {
+        let fixed_point = if T::M == 0 { 2.0 } else { 3.0 };
+        assert!(same_f32(T::from_f32(fixed_point).to_f32(), fixed_point));
+
+        let fixed_point = f64::from(fixed_point);
+        assert!(same_f64(T::from_f64(fixed_point).to_f64(), fixed_point));
+
+        assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
+        assert_eq!(
+            same_mini(T::from_f32(0.0), T::from_f32(-0.0)),
+            T::N == NanStyle::FNUZ
+        );
+
+        assert!(T::NAN.is_nan());
+        assert!(T::from_f32(f32::NAN).is_nan());
+        assert!(T::from_f64(f64::NAN).is_nan());
+
+        assert!(T::NAN.ne(&T::NAN));
+        assert!(same_mini(T::NAN, T::NAN));
+
+        for_all::<T>(|x| x.ne(&x) == x.is_nan())
+    }
 }
 
 #[test]
 fn test_equality() {
-    assert!(check_equality::<F8E2M5>());
-    assert!(check_equality::<F8E2M5FN>());
-    assert!(check_equality::<F8E2M5FNUZ>());
-
-    assert!(check_equality::<F8E3M4>());
-    assert!(check_equality::<F8E3M4FN>());
-    assert!(check_equality::<F8E3M4FNUZ>());
-
-    assert!(check_equality::<F8E4M3>());
-    assert!(check_equality::<F8E4M3FN>());
-    assert!(check_equality::<F8E4M3FNUZ>());
-
-    assert!(check_equality::<F8E4M3B11>());
-    assert!(check_equality::<F8E4M3B11FN>());
-    assert!(check_equality::<F8E4M3B11FNUZ>());
-
-    assert!(check_equality::<F8E5M2>());
-    assert!(check_equality::<F8E5M2FN>());
-    assert!(check_equality::<F8E5M2FNUZ>());
+    CheckEquality::test();
 }
