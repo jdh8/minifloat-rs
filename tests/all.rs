@@ -99,9 +99,9 @@ trait Check {
     }
 }
 
-struct CheckEquality;
+struct CheckEq;
 
-impl Check for CheckEquality {
+impl Check for CheckEq {
     fn check<T: Minifloat + Debug>() -> bool
     where
         Mask: AsPrimitive<T::Bits>,
@@ -131,5 +131,5 @@ impl Check for CheckEquality {
 
 #[test]
 fn test_equality() {
-    CheckEquality::test();
+    CheckEq::test();
 }
