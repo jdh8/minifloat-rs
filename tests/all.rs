@@ -99,37 +99,35 @@ trait Check {
     }
 }
 
-struct CheckEq;
-
-impl Check for CheckEq {
-    fn check<T: Minifloat + Debug>() -> bool
-    where
-        Mask: AsPrimitive<T::Bits>,
-    {
-        let fixed_point = if T::M == 0 { 2.0 } else { 3.0 };
-        assert!(same_f32(T::from_f32(fixed_point).to_f32(), fixed_point));
-
-        let fixed_point = f64::from(fixed_point);
-        assert!(same_f64(T::from_f64(fixed_point).to_f64(), fixed_point));
-
-        assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
-        assert_eq!(
-            same_mini(T::from_f32(0.0), T::from_f32(-0.0)),
-            T::N == NanStyle::FNUZ
-        );
-
-        assert!(T::NAN.is_nan());
-        assert!(T::from_f32(f32::NAN).is_nan());
-        assert!(T::from_f64(f64::NAN).is_nan());
-
-        assert!(T::NAN.ne(&T::NAN));
-        assert!(same_mini(T::NAN, T::NAN));
-
-        for_all::<T>(|x| x.ne(&x) == x.is_nan())
-    }
-}
-
 #[test]
 fn test_equality() {
+    struct CheckEq;
+    impl Check for CheckEq {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            let fixed_point = if T::M == 0 { 2.0 } else { 3.0 };
+            assert!(same_f32(T::from_f32(fixed_point).to_f32(), fixed_point));
+
+            let fixed_point = f64::from(fixed_point);
+            assert!(same_f64(T::from_f64(fixed_point).to_f64(), fixed_point));
+
+            assert_eq!(T::from_f32(0.0), T::from_f32(-0.0));
+            assert_eq!(
+                same_mini(T::from_f32(0.0), T::from_f32(-0.0)),
+                T::N == NanStyle::FNUZ
+            );
+
+            assert!(T::NAN.is_nan());
+            assert!(T::from_f32(f32::NAN).is_nan());
+            assert!(T::from_f64(f64::NAN).is_nan());
+
+            assert!(T::NAN.ne(&T::NAN));
+            assert!(same_mini(T::NAN, T::NAN));
+
+            for_all::<T>(|x| x.ne(&x) == x.is_nan())
+        }
+    }
     CheckEq::test();
 }
