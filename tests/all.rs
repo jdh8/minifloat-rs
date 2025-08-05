@@ -21,6 +21,19 @@ minifloat!(struct F8E2M5FNUZ(u8): 2, 5, FNUZ);
 minifloat!(struct F8E3M4FNUZ(u8): 3, 4, FNUZ);
 minifloat!(struct F8E5M2FN(u8): 5, 2, FN);
 
+minifloat!(struct F8E6M1(u8): 6, 1);
+minifloat!(struct F8E6M1FN(u8): 6, 1, FN);
+minifloat!(struct F8E6M1FNUZ(u8): 6, 1, FNUZ);
+
+minifloat!(struct F6E2M3(u8): 2, 3);
+minifloat!(struct F6E2M3FNUZ(u8): 2, 3, FNUZ);
+
+minifloat!(struct F6E3M2(u8): 3, 2);
+minifloat!(struct F6E3M2FNUZ(u8): 3, 2, FNUZ);
+
+minifloat!(struct F4E2M1(u8): 2, 1);
+minifloat!(struct F4E2M1FNUZ(u8): 2, 1, FNUZ);
+
 /// Bitmask returned by [`bit_mask`]
 ///
 /// This type must be an unsigned integer.
@@ -77,29 +90,48 @@ trait Check {
     fn check<T: Minifloat + Debug>() -> bool
     where
         Mask: AsPrimitive<T::Bits>;
+}
 
-    /// Test typical minifloats
-    fn test() {
-        assert!(Self::check::<F8E2M5>());
-        assert!(Self::check::<F8E2M5FN>());
-        assert!(Self::check::<F8E2M5FNUZ>());
+fn test_8_bits<T: Check>(_: T) {
+    assert!(T::check::<F8E2M5>());
+    assert!(T::check::<F8E2M5FN>());
+    assert!(T::check::<F8E2M5FNUZ>());
 
-        assert!(Self::check::<F8E3M4>());
-        assert!(Self::check::<F8E3M4FN>());
-        assert!(Self::check::<F8E3M4FNUZ>());
+    assert!(T::check::<F8E3M4>());
+    assert!(T::check::<F8E3M4FN>());
+    assert!(T::check::<F8E3M4FNUZ>());
 
-        assert!(Self::check::<F8E4M3>());
-        assert!(Self::check::<F8E4M3FN>());
-        assert!(Self::check::<F8E4M3FNUZ>());
+    assert!(T::check::<F8E4M3>());
+    assert!(T::check::<F8E4M3FN>());
+    assert!(T::check::<F8E4M3FNUZ>());
 
-        assert!(Self::check::<F8E4M3B11>());
-        assert!(Self::check::<F8E4M3B11FN>());
-        assert!(Self::check::<F8E4M3B11FNUZ>());
+    assert!(T::check::<F8E4M3B11>());
+    assert!(T::check::<F8E4M3B11FN>());
+    assert!(T::check::<F8E4M3B11FNUZ>());
 
-        assert!(Self::check::<F8E5M2>());
-        assert!(Self::check::<F8E5M2FN>());
-        assert!(Self::check::<F8E5M2FNUZ>());
-    }
+    assert!(T::check::<F8E5M2>());
+    assert!(T::check::<F8E5M2FN>());
+    assert!(T::check::<F8E5M2FNUZ>());
+
+    assert!(T::check::<F8E6M1>());
+    assert!(T::check::<F8E6M1FN>());
+    assert!(T::check::<F8E6M1FNUZ>());
+}
+
+fn test_most_8_bits<T: Check>(x: T) {
+    test_8_bits(x);
+
+    assert!(T::check::<F6E2M3>());
+    assert!(T::check::<F6E2M3FN>());
+    assert!(T::check::<F6E2M3FNUZ>());
+
+    assert!(T::check::<F6E3M2>());
+    assert!(T::check::<F6E3M2FN>());
+    assert!(T::check::<F6E3M2FNUZ>());
+
+    assert!(T::check::<F4E2M1>());
+    assert!(T::check::<F4E2M1FN>());
+    assert!(T::check::<F4E2M1FNUZ>());
 }
 
 #[test]
@@ -135,7 +167,7 @@ fn test_eq() {
             for_all::<T>(|x| x.ne(&x) == x.is_nan())
         }
     }
-    CheckEq::test();
+    test_most_8_bits(CheckEq);
 }
 
 #[test]
@@ -149,7 +181,7 @@ fn test_neg() {
             for_all::<T>(|x| x.to_bits() == (-(-x)).to_bits())
         }
     }
-    CheckNeg::test();
+    test_most_8_bits(CheckNeg);
 }
 
 #[test]
@@ -165,7 +197,7 @@ fn test_partial_cmp() {
             })
         }
     }
-    CheckOrd::test();
+    test_most_8_bits(CheckOrd);
 }
 
 #[test]
@@ -186,7 +218,7 @@ fn test_classify() {
             })
         }
     }
-    CheckClassify::test();
+    test_most_8_bits(CheckClassify);
 }
 
 #[test]
@@ -202,7 +234,7 @@ fn test_to_f32() {
             for_all::<T>(|x| same_mini(T::from_f32(x.to_f32()), x))
         }
     }
-    CheckToF32::test();
+    test_most_8_bits(CheckToF32);
 }
 
 #[test]
@@ -218,7 +250,7 @@ fn test_to_f64() {
             for_all::<T>(|x| same_mini(T::from_f64(x.to_f64()), x))
         }
     }
-    CheckToF64::test();
+    test_most_8_bits(CheckToF64);
 }
 
 #[test]
@@ -232,5 +264,5 @@ fn test_to_floats() {
             for_all::<T>(|x| same_f64(x.to_f32().into(), x.to_f64()))
         }
     }
-    CheckToFloats::test();
+    test_most_8_bits(CheckToFloats);
 }
