@@ -14,26 +14,6 @@ use num_traits::AsPrimitive;
 use core::fmt::Debug;
 use core::num::FpCategory;
 
-minifloat!(struct F8E2M5(u8): 2, 5);
-minifloat!(struct F8E2M5FN(u8): 2, 5, FN);
-minifloat!(struct F8E2M5FNUZ(u8): 2, 5, FNUZ);
-
-minifloat!(struct F8E3M4FNUZ(u8): 3, 4, FNUZ);
-minifloat!(struct F8E5M2FN(u8): 5, 2, FN);
-
-minifloat!(struct F8E6M1(u8): 6, 1);
-minifloat!(struct F8E6M1FN(u8): 6, 1, FN);
-minifloat!(struct F8E6M1FNUZ(u8): 6, 1, FNUZ);
-
-minifloat!(struct F6E2M3(u8): 2, 3);
-minifloat!(struct F6E2M3FNUZ(u8): 2, 3, FNUZ);
-
-minifloat!(struct F6E3M2(u8): 3, 2);
-minifloat!(struct F6E3M2FNUZ(u8): 3, 2, FNUZ);
-
-minifloat!(struct F4E2M1(u8): 2, 1);
-minifloat!(struct F4E2M1FNUZ(u8): 2, 1, FNUZ);
-
 /// Bitmask returned by [`bit_mask`]
 ///
 /// This type must be an unsigned integer.
@@ -93,6 +73,17 @@ trait Check {
 }
 
 fn test_8_bits<T: Check>(_: T) {
+    minifloat!(struct F8E2M5(u8): 2, 5);
+    minifloat!(struct F8E2M5FN(u8): 2, 5, FN);
+    minifloat!(struct F8E2M5FNUZ(u8): 2, 5, FNUZ);
+
+    minifloat!(struct F8E3M4FNUZ(u8): 3, 4, FNUZ);
+    minifloat!(struct F8E5M2FN(u8): 5, 2, FN);
+
+    minifloat!(struct F8E6M1(u8): 6, 1);
+    minifloat!(struct F8E6M1FN(u8): 6, 1, FN);
+    minifloat!(struct F8E6M1FNUZ(u8): 6, 1, FNUZ);
+
     assert!(T::check::<F8E2M5>());
     assert!(T::check::<F8E2M5FN>());
     assert!(T::check::<F8E2M5FNUZ>());
@@ -119,7 +110,14 @@ fn test_8_bits<T: Check>(_: T) {
 }
 
 fn test_most_8_bits<T: Check>(x: T) {
-    test_8_bits(x);
+    minifloat!(struct F6E2M3(u8): 2, 3);
+    minifloat!(struct F6E2M3FNUZ(u8): 2, 3, FNUZ);
+
+    minifloat!(struct F6E3M2(u8): 3, 2);
+    minifloat!(struct F6E3M2FNUZ(u8): 3, 2, FNUZ);
+
+    minifloat!(struct F4E2M1(u8): 2, 1);
+    minifloat!(struct F4E2M1FNUZ(u8): 2, 1, FNUZ);
 
     assert!(T::check::<F6E2M3>());
     assert!(T::check::<F6E2M3FN>());
@@ -132,6 +130,8 @@ fn test_most_8_bits<T: Check>(x: T) {
     assert!(T::check::<F4E2M1>());
     assert!(T::check::<F4E2M1FN>());
     assert!(T::check::<F4E2M1FNUZ>());
+
+    test_8_bits(x);
 }
 
 #[test]
@@ -230,7 +230,10 @@ fn test_to_f32() {
             Mask: AsPrimitive<T::Bits>,
         {
             assert!(same_f32(T::ZERO.to_f32(), 0.0));
-            assert!(same_f32((-T::ZERO).to_f32(), if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }));
+            assert!(same_f32(
+                (-T::ZERO).to_f32(),
+                if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }
+            ));
             for_all::<T>(|x| same_mini(T::from_f32(x.to_f32()), x))
         }
     }
@@ -246,7 +249,10 @@ fn test_to_f64() {
             Mask: AsPrimitive<T::Bits>,
         {
             assert!(same_f64(T::ZERO.to_f64(), 0.0));
-            assert!(same_f64((-T::ZERO).to_f64(), if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }));
+            assert!(same_f64(
+                (-T::ZERO).to_f64(),
+                if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }
+            ));
             for_all::<T>(|x| same_mini(T::from_f64(x.to_f64()), x))
         }
     }
