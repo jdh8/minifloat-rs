@@ -281,6 +281,22 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     #[must_use]
     fn is_sign_negative(self) -> bool;
 
+    /// Decompose the value into raw `(mantissa, exponent, sign)`
+    ///
+    /// The triple satisfies `value = sign × mantissa × 2`<sup>`exponent`</sup>
+    /// for finite numbers, with the LSB of `mantissa` aligned to the ULP of a
+    /// normal number.
+    ///
+    /// **NaN sentinel**: a NaN value returns `(0, 0, 0)`.  Finite values always
+    /// have `sign` equal to ±1, so `sign == 0` unambiguously identifies NaN.
+    ///
+    /// See also [`f32`'s `integer_decode`][num-traits-integer-decode] in
+    /// `num-traits`.
+    ///
+    /// [num-traits-integer-decode]: https://docs.rs/num-traits/latest/num_traits/float/trait.FloatCore.html#tymethod.integer_decode
+    #[must_use]
+    fn integer_decode(self) -> (u64, i16, i8);
+
     /// Probably lossy conversion from [`f32`]
     ///
     /// NaNs are preserved.  Overflows result in ±[`HUGE`][Self::HUGE].
@@ -630,6 +646,35 @@ macro_rules! minifloat {
                 self.0 >> (Self::E + Self::M) & 1 == 1
             }
 
+            /// Decompose the value into raw `(mantissa, exponent, sign)`
+            ///
+            /// The triple satisfies `value = sign × mantissa × 2`<sup>`exponent`</sup>
+            /// for finite numbers, with the LSB of `mantissa` aligned to the ULP
+            /// of a normal number.
+            ///
+            /// **NaN sentinel**: a NaN value returns `(0, 0, 0)`.  Finite values
+            /// always have `sign` equal to ±1, so `sign == 0` unambiguously
+            /// identifies NaN.
+            #[must_use]
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_lossless)]
+            pub const fn integer_decode(self) -> (u64, i16, i8) {
+                if self.is_nan() {
+                    return (0, 0, 0);
+                }
+                let bits = self.to_bits() as u64;
+                let sign: i8 = if (bits >> (Self::E + Self::M)) == 0 { 1 } else { -1 };
+                let field_mask: u64 = (1u64 << Self::E) - 1;
+                let exponent = ((bits >> Self::M) & field_mask) as i32;
+                let payload = bits & ((1u64 << Self::M) - 1);
+                let mantissa = if exponent == 0 {
+                    payload << 1
+                } else {
+                    payload | (1u64 << Self::M)
+                };
+                let bias = Self::M as i32 + Self::B;
+                (mantissa, (exponent - bias) as i16, sign)
+            }
+
             /// Map sign-magnitude notations to plain unsigned integers
             ///
             /// This serves as a hook for the [`Minifloat`] trait.
@@ -637,6 +682,37 @@ macro_rules! minifloat {
                 let sign = 1 << (Self::E + Self::M);
                 let mask = ((x & sign) >> (Self::E + Self::M)) * (sign - 1);
                 x ^ (sign | mask)
+            }
+
+            /// `const`-callable equality, equivalent to [`PartialEq::eq`]
+            ///
+            /// `==` cannot be used in `const` contexts on stable Rust until
+            /// `const_trait` is stabilized.  This method covers that gap.
+            #[must_use]
+            pub const fn const_eq(self, other: Self) -> bool {
+                let eq = self.0 == other.0 && !self.is_nan();
+                eq || !matches!(Self::N, $crate::NanStyle::FNUZ)
+                    && (self.0 | other.0) & Self::ABS_MASK == 0
+            }
+
+            /// `const`-callable partial comparison, equivalent to
+            /// [`PartialOrd::partial_cmp`]
+            ///
+            /// Returns `None` if either operand is NaN.
+            #[must_use]
+            pub const fn const_partial_cmp(self, other: Self) -> Option<core::cmp::Ordering> {
+                if self.is_nan() || other.is_nan() {
+                    return None;
+                }
+                if self.const_eq(other) {
+                    return Some(core::cmp::Ordering::Equal);
+                }
+                let sign = (self.0 | other.0) >> (Self::E + Self::M) & 1 == 1;
+                Some(if (self.0 > other.0) ^ sign {
+                    core::cmp::Ordering::Greater
+                } else {
+                    core::cmp::Ordering::Less
+                })
             }
 
             /// Probably lossy conversion from [`f32`]
@@ -819,8 +895,7 @@ macro_rules! minifloat {
 
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
-                let eq = self.0 == other.0 && !self.is_nan();
-                eq || !matches!(Self::N, $crate::NanStyle::FNUZ) && (self.0 | other.0) & Self::ABS_MASK == 0
+                self.const_eq(*other)
             }
         }
 
@@ -841,20 +916,7 @@ macro_rules! minifloat {
 
         impl PartialOrd for $name {
             fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-                if self.is_nan() || other.is_nan() {
-                    return None;
-                }
-                if self == other {
-                    return Some(core::cmp::Ordering::Equal);
-                }
-
-                let sign = (self.0 | other.0) >> (Self::E + Self::M) & 1 == 1;
-
-                Some(if (self.0 > other.0) ^ sign {
-                    core::cmp::Ordering::Greater
-                } else {
-                    core::cmp::Ordering::Less
-                })
+                self.const_partial_cmp(*other)
             }
         }
 
@@ -923,6 +985,10 @@ macro_rules! minifloat {
 
             fn is_sign_negative(self) -> bool {
                 self.is_sign_negative()
+            }
+
+            fn integer_decode(self) -> (u64, i16, i8) {
+                self.integer_decode()
             }
 
             fn from_f32(x: f32) -> Self {

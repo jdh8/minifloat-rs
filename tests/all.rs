@@ -275,6 +275,22 @@ fn test_to_floats() {
 }
 
 #[test]
+fn test_const_comparison_helpers() {
+    use core::cmp::Ordering;
+    const _: () = {
+        let zero = F16::ZERO;
+        let one = F16::from_bits(0x3C00);
+        assert!(zero.const_eq(F16::ZERO));
+        assert!(!zero.const_eq(one));
+        assert!(matches!(
+            one.const_partial_cmp(zero),
+            Some(Ordering::Greater)
+        ));
+        assert!(F16::NAN.const_partial_cmp(zero).is_none());
+    };
+}
+
+#[test]
 fn test_has_exact_conversion_consts() {
     const _: () = assert!(F16::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(F16::HAS_EXACT_F64_CONVERSION);
@@ -302,6 +318,35 @@ fn test_from_lossless() {
     assert!(check::<F8E5M2>());
     assert!(check::<F8E4M3FNUZ>());
     assert!(check::<F4E2M1FN>());
+}
+
+#[test]
+fn test_integer_decode_reconstruction() {
+    struct CheckIntegerDecode;
+    impl Check for CheckIntegerDecode {
+        fn check<T: Minifloat + Debug + Hash>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            for_all::<T>(|x| {
+                let (mantissa, exponent, sign) = x.integer_decode();
+                if x.is_nan() {
+                    return (mantissa, exponent, sign) == (0, 0, 0);
+                }
+                if sign != 1 && sign != -1 {
+                    return false;
+                }
+                // Reconstruction is only guaranteed for finite values, matching
+                // `f32::integer_decode`.
+                if !x.is_finite() {
+                    return true;
+                }
+                let reconstructed = f64::from(sign) * mantissa as f64 * libm::exp2(f64::from(exponent));
+                same_f64(reconstructed, x.to_f64())
+            })
+        }
+    }
+    test_most_8_bits(CheckIntegerDecode);
 }
 
 #[test]
