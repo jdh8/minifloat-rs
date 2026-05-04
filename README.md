@@ -67,6 +67,21 @@ The [`example`] module additionally provides several 8-, 6-, and 4-bit types
 - **No `num_traits::Float`.**  `FN` and `FNUZ` lack infinities; `FNUZ` lacks
   &minus;0.  The crate exposes its own [`Minifloat`] trait instead.
 
+## Arithmetic
+
+Binary `+`, `-`, `*`, `/` and their compound forms are implemented for every
+generated type.  Addition/subtraction/multiplication route through `f32` when
+the type's precision and exponent range allow it (`USE_F32_ADD`,
+`USE_F32_MUL` are exposed as `pub const` items), falling back to `f64`
+otherwise.  Division always routes through `f64`.
+
+```rust
+use minifloat::F16;
+let x = F16::from_f32(1.5);
+let y = F16::from_f32(2.5);
+assert_eq!((x + y).to_f32(), 4.0);
+```
+
 ## Hashing
 
 All generated types implement [`Hash`](core::hash::Hash) with `+0` and

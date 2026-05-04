@@ -275,6 +275,42 @@ fn test_to_floats() {
 }
 
 #[test]
+fn test_arithmetic_matches_f64() {
+    struct CheckArith;
+    impl Check for CheckArith {
+        fn check<T: Minifloat + Debug + Hash>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            for_all::<T>(|x| {
+                for_all::<T>(|y| {
+                    let xf = x.to_f64();
+                    let yf = y.to_f64();
+                    same_mini(x + y, T::from_f64(xf + yf))
+                        && same_mini(x - y, T::from_f64(xf - yf))
+                        && same_mini(x * y, T::from_f64(xf * yf))
+                        && same_mini(x / y, T::from_f64(xf / yf))
+                })
+            })
+        }
+    }
+    test_most_8_bits(CheckArith);
+}
+
+#[test]
+fn test_compound_assignment() {
+    let mut x = F8E4M3FN::from_f64(1.5);
+    x += F8E4M3FN::from_f64(0.5);
+    assert_eq!(x.to_f64(), 2.0);
+    x -= F8E4M3FN::from_f64(0.5);
+    assert_eq!(x.to_f64(), 1.5);
+    x *= F8E4M3FN::from_f64(2.0);
+    assert_eq!(x.to_f64(), 3.0);
+    x /= F8E4M3FN::from_f64(2.0);
+    assert_eq!(x.to_f64(), 1.5);
+}
+
+#[test]
 fn test_const_comparison_helpers() {
     use core::cmp::Ordering;
     const _: () = {

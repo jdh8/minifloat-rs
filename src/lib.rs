@@ -84,11 +84,22 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
 ///
 /// 1. [`FN`][NanStyle::FN] and [`FNUZ`][NanStyle::FNUZ] types do not have infinities.
 /// 2. [`FNUZ`][NanStyle::FNUZ] types do not have a negative zero.
-/// 3. I don't have plans for [arithmetic operations][ops] yet.
+///
+/// Binary arithmetic (`+`, `-`, `*`, `/`) routes through [`f32`] when the
+/// type's precision and exponent range allow it, falling back to [`f64`]
+/// otherwise.  Division always routes through [`f64`].
 ///
 /// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
-/// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
-pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
+pub trait Minifloat:
+    Copy
+    + PartialEq
+    + PartialOrd
+    + Neg<Output = Self>
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+{
     /// Storage type — restricted to the unsigned primitive integers
     type Bits: sealed::Sealed + Copy + Default + Eq + 'static;
 
@@ -177,6 +188,24 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
         && f64::MAX_EXP >= Self::MAX_EXP
         && f64::MIN_EXP <= Self::MIN_EXP;
+
+    /// Whether `x + y` and `x - y` may safely route through [`f32`]
+    ///
+    /// Addition or subtraction in `f32` is bit-exact equivalent to performing
+    /// it in this type when the `f32` mantissa has at least twice this type's
+    /// precision and its exponent range strictly exceeds this type's.
+    const USE_F32_ADD: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
+        && f32::MAX_EXP > Self::MAX_EXP
+        && f32::MIN_EXP < Self::MIN_EXP;
+
+    /// Whether `x * y` may safely route through [`f32`]
+    ///
+    /// Multiplication doubles the exponent and the mantissa width, so this
+    /// requires `f32`'s mantissa to have at least twice the precision of this
+    /// type and its exponent range to cover at least double this type's.
+    const USE_F32_MUL: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
+        && f32::MAX_EXP >= 2 * Self::MAX_EXP
+        && f32::MIN_EXP - 1 <= 2 * (Self::MIN_EXP - 1);
 
     /// One representation of NaN
     const NAN: Self;
@@ -496,6 +525,16 @@ macro_rules! minifloat {
             pub const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
                 && f64::MAX_EXP >= Self::MAX_EXP
                 && f64::MIN_EXP <= Self::MIN_EXP;
+
+            /// Whether `x + y` and `x - y` may safely route through [`f32`]
+            pub const USE_F32_ADD: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
+                && f32::MAX_EXP > Self::MAX_EXP
+                && f32::MIN_EXP < Self::MIN_EXP;
+
+            /// Whether `x * y` may safely route through [`f32`]
+            pub const USE_F32_MUL: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
+                && f32::MAX_EXP >= 2 * Self::MAX_EXP
+                && f32::MIN_EXP - 1 <= 2 * (Self::MIN_EXP - 1);
 
             /// One representation of NaN
             pub const NAN: Self = Self(match Self::N {
@@ -928,6 +967,62 @@ macro_rules! minifloat {
                 let switch = <$bits>::from(!flag) << (Self::E + Self::M);
                 Self(self.0 ^ switch)
             }
+        }
+
+        impl core::ops::Add for $name {
+            type Output = Self;
+            fn add(self, rhs: Self) -> Self {
+                if Self::USE_F32_ADD {
+                    Self::from_f32(self.to_f32() + rhs.to_f32())
+                } else {
+                    Self::from_f64(self.to_f64() + rhs.to_f64())
+                }
+            }
+        }
+
+        impl core::ops::Sub for $name {
+            type Output = Self;
+            fn sub(self, rhs: Self) -> Self {
+                if Self::USE_F32_ADD {
+                    Self::from_f32(self.to_f32() - rhs.to_f32())
+                } else {
+                    Self::from_f64(self.to_f64() - rhs.to_f64())
+                }
+            }
+        }
+
+        impl core::ops::Mul for $name {
+            type Output = Self;
+            fn mul(self, rhs: Self) -> Self {
+                if Self::USE_F32_MUL {
+                    Self::from_f32(self.to_f32() * rhs.to_f32())
+                } else {
+                    Self::from_f64(self.to_f64() * rhs.to_f64())
+                }
+            }
+        }
+
+        impl core::ops::Div for $name {
+            type Output = Self;
+            fn div(self, rhs: Self) -> Self {
+                Self::from_f64(self.to_f64() / rhs.to_f64())
+            }
+        }
+
+        impl core::ops::AddAssign for $name {
+            fn add_assign(&mut self, rhs: Self) { *self = *self + rhs; }
+        }
+
+        impl core::ops::SubAssign for $name {
+            fn sub_assign(&mut self, rhs: Self) { *self = *self - rhs; }
+        }
+
+        impl core::ops::MulAssign for $name {
+            fn mul_assign(&mut self, rhs: Self) { *self = *self * rhs; }
+        }
+
+        impl core::ops::DivAssign for $name {
+            fn div_assign(&mut self, rhs: Self) { *self = *self / rhs; }
         }
 
         impl $crate::Minifloat for $name {
