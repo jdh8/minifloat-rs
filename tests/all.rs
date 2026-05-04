@@ -7,11 +7,12 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use minifloat::example::*;
-use minifloat::{minifloat, Minifloat, NanStyle};
+use minifloat::{minifloat, Minifloat, NanStyle, F16, BF16};
 
 use num_traits::AsPrimitive;
 
 use core::fmt::Debug;
+use core::hash::{BuildHasher, Hash};
 use core::num::FpCategory;
 
 /// Bitmask returned by [`bit_mask`]
@@ -67,7 +68,7 @@ where
 /// functions, traits can work as parameters.
 trait Check {
     /// Check properties of a minifloat type
-    fn check<T: Minifloat + Debug>() -> bool
+    fn check<T: Minifloat + Debug + Hash>() -> bool
     where
         Mask: AsPrimitive<T::Bits>;
 }
@@ -271,4 +272,51 @@ fn test_to_floats() {
         }
     }
     test_most_8_bits(CheckToFloats);
+}
+
+#[test]
+fn test_has_exact_conversion_consts() {
+    const _: () = assert!(F16::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(F16::HAS_EXACT_F64_CONVERSION);
+    const _: () = assert!(BF16::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(BF16::HAS_EXACT_F64_CONVERSION);
+    const _: () = assert!(F8E4M3FN::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(F8E4M3FN::HAS_EXACT_F64_CONVERSION);
+}
+
+#[test]
+fn test_from_lossless() {
+    fn check<T: Minifloat + Debug + Into<f32> + Into<f64>>() -> bool
+    where
+        Mask: AsPrimitive<T::Bits>,
+    {
+        for_all::<T>(|x| {
+            let via_from_f32: f32 = x.into();
+            let via_from_f64: f64 = x.into();
+            same_f32(via_from_f32, x.to_f32()) && same_f64(via_from_f64, x.to_f64())
+        })
+    }
+    assert!(check::<F16>());
+    assert!(check::<BF16>());
+    assert!(check::<F8E4M3FN>());
+    assert!(check::<F8E5M2>());
+    assert!(check::<F8E4M3FNUZ>());
+    assert!(check::<F4E2M1FN>());
+}
+
+#[test]
+fn test_hash_consistent_with_eq() {
+    struct CheckHash;
+    impl Check for CheckHash {
+        fn check<T: Minifloat + Debug + Hash>() -> bool
+        where
+            Mask: AsPrimitive<T::Bits>,
+        {
+            let state = std::collections::hash_map::RandomState::new();
+            for_all::<T>(|x| {
+                for_all::<T>(|y| x != y || state.hash_one(x) == state.hash_one(y))
+            })
+        }
+    }
+    test_most_8_bits(CheckHash);
 }

@@ -15,7 +15,16 @@ pub mod example;
 use core::cmp::Ordering;
 use core::f64::consts::LOG10_2;
 use core::ops::Neg;
-use num_traits::{PrimInt, Unsigned};
+
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for u8 {}
+    impl Sealed for u16 {}
+    impl Sealed for u32 {}
+    impl Sealed for u64 {}
+    impl Sealed for u128 {}
+    impl Sealed for usize {}
+}
 
 /// NaN encoding style
 ///
@@ -80,8 +89,8 @@ const LOG2_SIGNIFICAND: [f64; 16] = [
 /// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
 /// [ops]: https://docs.rs/num-traits/latest/num_traits/trait.NumOps.html
 pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
-    /// Storage type
-    type Bits: PrimInt + Unsigned + 'static;
+    /// Storage type — restricted to the unsigned primitive integers
+    type Bits: sealed::Sealed + Copy + Default + Eq + 'static;
 
     /// Whether the type is signed
     const S: bool = true;
@@ -152,6 +161,22 @@ pub trait Minifloat: Copy + PartialEq + PartialOrd + Neg<Output = Self> {
     /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
     #[allow(clippy::cast_possible_truncation)]
     const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * crate::LOG10_2) as i32;
+
+    /// Whether every value of this type is exactly representable as [`f32`]
+    ///
+    /// When this is `true`, [`to_f32`][Self::to_f32] is bit-exact and an
+    /// `impl From<Self> for f32` is provided.
+    const HAS_EXACT_F32_CONVERSION: bool = f32::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
+        && f32::MAX_EXP >= Self::MAX_EXP
+        && f32::MIN_EXP <= Self::MIN_EXP;
+
+    /// Whether every value of this type is exactly representable as [`f64`]
+    ///
+    /// When this is `true`, [`to_f64`][Self::to_f64] is bit-exact and an
+    /// `impl From<Self> for f64` is provided.
+    const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
+        && f64::MAX_EXP >= Self::MAX_EXP
+        && f64::MIN_EXP <= Self::MIN_EXP;
 
     /// One representation of NaN
     const NAN: Self;
@@ -295,6 +320,70 @@ macro_rules! __conditionally_define_infinities {
     (impl $name:ident, $n:ident) => {};
 }
 
+/// Provide a lossless `From<$name> for f32` impl for a minifloat type
+///
+/// This macro asserts at compile time that
+/// [`HAS_EXACT_F32_CONVERSION`][Minifloat::HAS_EXACT_F32_CONVERSION] is `true`.
+/// Use it to opt into idiomatic `f32::from(x)` conversion for minifloats whose
+/// values are all exactly representable as [`f32`].
+///
+/// ## Example
+///
+/// ```
+/// use minifloat::{minifloat, impl_from_minifloat_for_f32};
+/// minifloat!(pub struct F8E4M3FN(u8): 4, 3, FN);
+/// impl_from_minifloat_for_f32!(F8E4M3FN);
+/// let _: f32 = F8E4M3FN::ZERO.into();
+/// ```
+#[macro_export]
+macro_rules! impl_from_minifloat_for_f32 {
+    ($name:ty) => {
+        const _: () = assert!(
+            <$name>::HAS_EXACT_F32_CONVERSION,
+            concat!(stringify!($name), " is not exactly representable as f32"),
+        );
+
+        impl From<$name> for f32 {
+            #[inline]
+            fn from(x: $name) -> Self {
+                x.to_f32()
+            }
+        }
+    };
+}
+
+/// Provide a lossless `From<$name> for f64` impl for a minifloat type
+///
+/// This macro asserts at compile time that
+/// [`HAS_EXACT_F64_CONVERSION`][Minifloat::HAS_EXACT_F64_CONVERSION] is `true`.
+/// Use it to opt into idiomatic `f64::from(x)` conversion for minifloats whose
+/// values are all exactly representable as [`f64`].
+///
+/// ## Example
+///
+/// ```
+/// use minifloat::{minifloat, impl_from_minifloat_for_f64};
+/// minifloat!(pub struct F8E4M3FN(u8): 4, 3, FN);
+/// impl_from_minifloat_for_f64!(F8E4M3FN);
+/// let _: f64 = F8E4M3FN::ZERO.into();
+/// ```
+#[macro_export]
+macro_rules! impl_from_minifloat_for_f64 {
+    ($name:ty) => {
+        const _: () = assert!(
+            <$name>::HAS_EXACT_F64_CONVERSION,
+            concat!(stringify!($name), " is not exactly representable as f64"),
+        );
+
+        impl From<$name> for f64 {
+            #[inline]
+            fn from(x: $name) -> Self {
+                x.to_f64()
+            }
+        }
+    };
+}
+
 /// Configure a (signed) minifloat
 ///
 /// * `$name`: name of the type
@@ -375,6 +464,22 @@ macro_rules! minifloat {
             /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
             /// interpreted as normal or subnormal.
             pub const MIN_EXP: i32 = 2 - Self::B;
+
+            /// Whether every value of this type is exactly representable as [`f32`]
+            ///
+            /// When this is `true`, [`to_f32`][Self::to_f32] is bit-exact and an
+            /// `impl From<Self> for f32` is provided.
+            pub const HAS_EXACT_F32_CONVERSION: bool = f32::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
+                && f32::MAX_EXP >= Self::MAX_EXP
+                && f32::MIN_EXP <= Self::MIN_EXP;
+
+            /// Whether every value of this type is exactly representable as [`f64`]
+            ///
+            /// When this is `true`, [`to_f64`][Self::to_f64] is bit-exact and an
+            /// `impl From<Self> for f64` is provided.
+            pub const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
+                && f64::MAX_EXP >= Self::MAX_EXP
+                && f64::MIN_EXP <= Self::MIN_EXP;
 
             /// One representation of NaN
             pub const NAN: Self = Self(match Self::N {
@@ -691,11 +796,7 @@ macro_rules! minifloat {
             /// Best effort conversion to [`f64`]
             #[must_use]
             pub fn to_f64(self) -> f64 {
-                let lossless = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
-                    && f64::MAX_EXP >= Self::MAX_EXP
-                    && f64::MIN_EXP <= Self::MIN_EXP;
-
-                if lossless {
+                if Self::HAS_EXACT_F64_CONVERSION {
                     self.fast_to_f64()
                 } else {
                     self.as_f64()
@@ -705,11 +806,7 @@ macro_rules! minifloat {
             /// Best effort conversion to [`f32`]
             #[must_use]
             pub fn to_f32(self) -> f32 {
-                let lossless = f32::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
-                    && f32::MAX_EXP >= Self::MAX_EXP
-                    && f32::MIN_EXP <= Self::MIN_EXP;
-
-                if lossless {
+                if Self::HAS_EXACT_F32_CONVERSION {
                     return self.fast_to_f32();
                 }
                 // Conversion to `f64` is lossy only when then exponent width is
@@ -724,6 +821,21 @@ macro_rules! minifloat {
             fn eq(&self, other: &Self) -> bool {
                 let eq = self.0 == other.0 && !self.is_nan();
                 eq || !matches!(Self::N, $crate::NanStyle::FNUZ) && (self.0 | other.0) & Self::ABS_MASK == 0
+            }
+        }
+
+        impl core::hash::Hash for $name {
+            /// Hash a minifloat by its bit pattern, normalizing zero so `+0` and
+            /// `-0` (in [IEEE][$crate::NanStyle::IEEE] and [FN][$crate::NanStyle::FN]
+            /// styles) hash to the same value.  NaN values hash by their raw
+            /// bits, consistent with `NaN != NaN`.
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                let bits = if !self.is_nan() && self.0 & Self::ABS_MASK == 0 {
+                    <$bits>::default()
+                } else {
+                    self.0
+                };
+                bits.hash(state);
             }
         }
 
@@ -844,4 +956,9 @@ macro_rules! minifloat {
 }
 
 minifloat!(pub struct F16(u16): 5, 10);
+impl_from_minifloat_for_f32!(F16);
+impl_from_minifloat_for_f64!(F16);
+
 minifloat!(pub struct BF16(u16): 8, 7);
+impl_from_minifloat_for_f32!(BF16);
+impl_from_minifloat_for_f64!(BF16);
