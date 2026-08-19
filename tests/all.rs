@@ -6,8 +6,10 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use minifloat::example::*;
-use minifloat::{minifloat, Minifloat, NanStyle, F16, BF16};
+use minifloat::{
+    minifloat, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3, F8E4M3B11FNUZ,
+    F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
+};
 
 use num_traits::AsPrimitive;
 
@@ -77,17 +79,27 @@ fn test_8_bits<T: Check>(_: T) {
     minifloat!(struct F8E2M5(u8): 2, 5);
     minifloat!(struct F8E2M5FN(u8): 2, 5, FN);
     minifloat!(struct F8E2M5FNUZ(u8): 2, 5, FNUZ);
+    minifloat!(struct F8E2M5Finite(u8): 2, 5, Finite);
 
+    // No longer shipped by the crate, but still worth exhaustive coverage.
+    minifloat!(struct F8E3M4FN(u8): 3, 4, FN);
     minifloat!(struct F8E3M4FNUZ(u8): 3, 4, FNUZ);
+    minifloat!(struct F8E4M3B11(u8): 4, 3, 11);
+    minifloat!(struct F8E4M3B11FN(u8): 4, 3, 11, FN);
+
+    minifloat!(struct F8E4M3Finite(u8): 4, 3, Finite);
     minifloat!(struct F8E5M2FN(u8): 5, 2, FN);
+    minifloat!(struct F8E5M2Finite(u8): 5, 2, Finite);
 
     minifloat!(struct F8E6M1(u8): 6, 1);
     minifloat!(struct F8E6M1FN(u8): 6, 1, FN);
     minifloat!(struct F8E6M1FNUZ(u8): 6, 1, FNUZ);
+    minifloat!(struct F8E6M1Finite(u8): 6, 1, Finite);
 
     assert!(T::check::<F8E2M5>());
     assert!(T::check::<F8E2M5FN>());
     assert!(T::check::<F8E2M5FNUZ>());
+    assert!(T::check::<F8E2M5Finite>());
 
     assert!(T::check::<F8E3M4>());
     assert!(T::check::<F8E3M4FN>());
@@ -96,6 +108,7 @@ fn test_8_bits<T: Check>(_: T) {
     assert!(T::check::<F8E4M3>());
     assert!(T::check::<F8E4M3FN>());
     assert!(T::check::<F8E4M3FNUZ>());
+    assert!(T::check::<F8E4M3Finite>());
 
     assert!(T::check::<F8E4M3B11>());
     assert!(T::check::<F8E4M3B11FN>());
@@ -104,10 +117,12 @@ fn test_8_bits<T: Check>(_: T) {
     assert!(T::check::<F8E5M2>());
     assert!(T::check::<F8E5M2FN>());
     assert!(T::check::<F8E5M2FNUZ>());
+    assert!(T::check::<F8E5M2Finite>());
 
     assert!(T::check::<F8E6M1>());
     assert!(T::check::<F8E6M1FN>());
     assert!(T::check::<F8E6M1FNUZ>());
+    assert!(T::check::<F8E6M1Finite>());
 }
 
 fn test_most_8_bits<T: Check>(x: T) {
@@ -120,17 +135,26 @@ fn test_most_8_bits<T: Check>(x: T) {
     minifloat!(struct F4E2M1(u8): 2, 1);
     minifloat!(struct F4E2M1FNUZ(u8): 2, 1, FNUZ);
 
+    // The crate's MX types carry the `Finite` format despite their `FN` names,
+    // so these cover the `FN` format at the same shapes.
+    minifloat!(struct E2M3FN(u8): 2, 3, FN);
+    minifloat!(struct E3M2FN(u8): 3, 2, FN);
+    minifloat!(struct E2M1FN(u8): 2, 1, FN);
+
     assert!(T::check::<F6E2M3>());
     assert!(T::check::<F6E2M3FN>());
     assert!(T::check::<F6E2M3FNUZ>());
+    assert!(T::check::<E2M3FN>());
 
     assert!(T::check::<F6E3M2>());
     assert!(T::check::<F6E3M2FN>());
     assert!(T::check::<F6E3M2FNUZ>());
+    assert!(T::check::<E3M2FN>());
 
     assert!(T::check::<F4E2M1>());
     assert!(T::check::<F4E2M1FN>());
     assert!(T::check::<F4E2M1FNUZ>());
+    assert!(T::check::<E2M1FN>());
 
     test_8_bits(x);
 }
@@ -153,17 +177,39 @@ fn test_eq() {
             assert_eq!(T::ZERO, T::from_f32(0.0));
             assert_eq!(T::ZERO, T::from_f32(-0.0));
 
-            assert_eq!(
-                same_mini(T::ZERO, T::from_f32(-0.0)),
-                T::N == NanStyle::FNUZ
-            );
+            assert_eq!(same_mini(T::ZERO, T::from_f32(-0.0)), !T::HAS_NEG_ZERO);
 
-            assert!(T::NAN.is_nan());
-            assert!(T::from_f32(f32::NAN).is_nan());
-            assert!(T::from_f64(f64::NAN).is_nan());
+            match T::NAN {
+                Some(nan) => {
+                    assert!(nan.is_nan());
+                    assert!(T::from_f32(f32::NAN).is_nan());
+                    assert!(T::from_f64(f64::NAN).is_nan());
 
-            assert!(T::NAN.ne(&T::NAN));
-            assert!(same_mini(T::NAN, T::NAN));
+                    assert!(nan.ne(&nan));
+                    assert!(same_mini(nan, nan));
+                }
+                // Without a NaN encoding, a NaN input saturates to the maximum
+                // finite value with the sign preserved.
+                None => {
+                    assert!(same_mini(T::from_f32(f32::NAN), T::MAX));
+                    assert!(same_mini(T::from_f64(f64::NAN), T::MAX));
+                    assert!(same_mini(T::from_f32(-f32::NAN), T::MIN));
+                    assert!(same_mini(T::from_f64(-f64::NAN), T::MIN));
+
+                    // An all-ones payload carries out of the exponent field if
+                    // it ever reaches the rounding path.
+                    assert!(same_mini(T::from_f32(f32::from_bits(0x7FFF_FFFF)), T::MAX));
+                    assert!(same_mini(T::from_f32(f32::from_bits(0xFFFF_FFFF)), T::MIN));
+                    assert!(same_mini(
+                        T::from_f64(f64::from_bits(0x7FFF_FFFF_FFFF_FFFF)),
+                        T::MAX
+                    ));
+                    assert!(same_mini(
+                        T::from_f64(f64::from_bits(0xFFFF_FFFF_FFFF_FFFF)),
+                        T::MIN
+                    ));
+                }
+            }
 
             for_all::<T>(|x| x.ne(&x) == x.is_nan())
         }
@@ -233,7 +279,7 @@ fn test_to_f32() {
             assert!(same_f32(T::ZERO.to_f32(), 0.0));
             assert!(same_f32(
                 (-T::ZERO).to_f32(),
-                if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }
+                if T::HAS_NEG_ZERO { -0.0 } else { 0.0 }
             ));
             for_all::<T>(|x| same_mini(T::from_f32(x.to_f32()), x))
         }
@@ -252,7 +298,7 @@ fn test_to_f64() {
             assert!(same_f64(T::ZERO.to_f64(), 0.0));
             assert!(same_f64(
                 (-T::ZERO).to_f64(),
-                if T::N == NanStyle::FNUZ { 0.0 } else { -0.0 }
+                if T::HAS_NEG_ZERO { -0.0 } else { 0.0 }
             ));
             for_all::<T>(|x| same_mini(T::from_f64(x.to_f64()), x))
         }
@@ -323,6 +369,8 @@ fn test_const_comparison_helpers() {
             Some(Ordering::Greater)
         ));
         assert!(F16::NAN.const_partial_cmp(zero).is_none());
+        assert!(F16::NAN.is_nan());
+        assert!(F16::INFINITY.const_eq(F16::HUGE));
     };
 }
 
@@ -354,6 +402,12 @@ fn test_from_lossless() {
     assert!(check::<F8E5M2>());
     assert!(check::<F8E4M3FNUZ>());
     assert!(check::<F4E2M1FN>());
+    assert!(check::<F6E2M3FN>());
+    assert!(check::<F6E3M2FN>());
+    assert!(check::<F8E3M4>());
+    assert!(check::<F8E4M3>());
+    assert!(check::<F8E4M3B11FNUZ>());
+    assert!(check::<F8E5M2FNUZ>());
 }
 
 #[test]
@@ -400,4 +454,133 @@ fn test_hash_consistent_with_eq() {
         }
     }
     test_most_8_bits(CheckHash);
+}
+
+/// Format of a minifloat, spelled out independently of the crate
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Format {
+    /// Every bit pattern is a finite number
+    Finite,
+    /// Maximum exponent reserved for ±∞ and NaN
+    Ieee,
+    /// All-ones magnitude reserved for NaN
+    Fn,
+    /// &minus;0.0 encoding reserved for NaN
+    Fnuz,
+}
+
+/// Textbook value of a bit pattern, computed from the raw fields
+///
+/// This deliberately shares no code with the crate: it is the definition a
+/// human would read off the format specification.
+fn oracle(bits: Mask, e_width: u32, m_width: u32, bias: i32, format: Format) -> f64 {
+    let sign = bits >> (e_width + m_width) & 1;
+    let exponent = bits >> m_width & bit_mask(e_width);
+    let mantissa = bits & bit_mask(m_width);
+    let sign = if sign == 1 { -1.0 } else { 1.0 };
+
+    match format {
+        Format::Ieee if exponent == bit_mask(e_width) => {
+            return if mantissa == 0 { sign * f64::INFINITY } else { f64::NAN };
+        }
+        Format::Fn if exponent == bit_mask(e_width) && mantissa == bit_mask(m_width) => {
+            return f64::NAN;
+        }
+        Format::Fnuz if sign < 0.0 && exponent == 0 && mantissa == 0 => return f64::NAN,
+        _ => {}
+    }
+
+    let (significand, exponent) = if exponent == 0 {
+        (mantissa as f64, 1 - bias)
+    } else {
+        (mantissa as f64 + libm::exp2(f64::from(m_width)), exponent as i32 - bias)
+    };
+    #[allow(clippy::cast_possible_wrap)]
+    let scale = libm::exp2(f64::from(exponent - m_width as i32));
+    sign * significand * scale
+}
+
+/// Check every bit pattern of `T` against [`oracle`]
+///
+/// The parameters restate the format independently of `T`'s declaration, so a
+/// type declared with the wrong exponent bias or the wrong format fails here.
+fn check_oracle<T: Minifloat>(e_width: u32, m_width: u32, bias: i32, format: Format)
+where
+    Mask: AsPrimitive<T::Bits>,
+{
+    assert_eq!((T::E, T::M, T::B), (e_width, m_width, bias));
+    assert_eq!(T::NAN.is_some(), format != Format::Finite);
+    assert_eq!(T::INFINITY.is_some(), format == Format::Ieee);
+    assert_eq!(T::HAS_NEG_ZERO, format != Format::Fnuz);
+
+    for bits in 0..=bit_mask(T::BITWIDTH) {
+        let expected = oracle(bits, e_width, m_width, bias, format);
+        let actual = T::from_bits(bits.as_()).to_f64();
+        assert!(
+            same_f64(actual, expected),
+            "bits {bits:#x}: got {actual}, expected {expected}"
+        );
+    }
+}
+
+#[test]
+fn test_predefined_types_match_their_specification() {
+    check_oracle::<F4E2M1FN>(2, 1, 1, Format::Finite);
+    check_oracle::<F6E2M3FN>(2, 3, 1, Format::Finite);
+    check_oracle::<F6E3M2FN>(3, 2, 3, Format::Finite);
+    check_oracle::<F8E3M4>(3, 4, 3, Format::Ieee);
+    check_oracle::<F8E4M3>(4, 3, 7, Format::Ieee);
+    check_oracle::<F8E4M3FN>(4, 3, 7, Format::Fn);
+    check_oracle::<F8E4M3FNUZ>(4, 3, 8, Format::Fnuz);
+    check_oracle::<F8E4M3B11FNUZ>(4, 3, 11, Format::Fnuz);
+    check_oracle::<F8E5M2>(5, 2, 15, Format::Ieee);
+    check_oracle::<F8E5M2FNUZ>(5, 2, 16, Format::Fnuz);
+    check_oracle::<F16>(5, 10, 15, Format::Ieee);
+    check_oracle::<BF16>(8, 7, 127, Format::Ieee);
+}
+
+#[test]
+fn test_predefined_maxima() {
+    // OCP MX: the all-ones magnitude is a value, not a NaN.
+    const _: () = assert!(!F4E2M1FN::HAS_NAN);
+    const _: () = assert!(!F4E2M1FN::HAS_INF);
+    assert_eq!(F4E2M1FN::MAX.to_f64(), 6.0);
+    assert_eq!(F6E2M3FN::MAX.to_f64(), 7.5);
+    assert_eq!(F6E3M2FN::MAX.to_f64(), 28.0);
+
+    // The format is not the name suffix: `FN` still means all-ones-is-NaN.
+    minifloat!(struct T(u8): 2, 1, FN);
+    const _: () = assert!(T::HAS_NAN);
+    assert_eq!(T::MAX.to_f64(), 4.0);
+
+    // LLVM's `FNUZ` bias is 2^(E-1), not 2^(E-1) - 1.
+    const _: () = assert!(F8E4M3FNUZ::B == 8);
+    const _: () = assert!(F8E5M2FNUZ::B == 16);
+    assert_eq!(F8E4M3FNUZ::MAX.to_f64(), 240.0);
+    assert_eq!(F8E5M2FNUZ::MAX.to_f64(), 57344.0);
+    assert_eq!(F8E4M3B11FNUZ::MAX.to_f64(), 30.0);
+
+    // The table in README.md
+    assert_eq!(F8E3M4::MAX.to_f64(), 15.5);
+    assert_eq!(F8E4M3::MAX.to_f64(), 240.0);
+    assert_eq!(F8E4M3FN::MAX.to_f64(), 448.0);
+    assert_eq!(F8E5M2::MAX.to_f64(), 57344.0);
+    assert_eq!(F16::MAX.to_f64(), 65504.0);
+    assert_eq!(BF16::MAX.to_f64(), libm::exp2(128.0) * (1.0 - libm::exp2(-8.0)));
+}
+
+#[test]
+fn test_max_10_exp() {
+    // `MAX_EXP` already accounts for NaN eating the top row, so an `FN` type
+    // with no mantissa bits needs no special case.
+    minifloat!(struct E4M0FN(u8): 4, 0, 8, FN);
+    const _: () = assert!(E4M0FN::MAX_EXP == 7);
+    const _: () = assert!(E4M0FN::MAX_10_EXP == 1);
+    assert_eq!(E4M0FN::MAX.to_f64(), 64.0);
+
+    const _: () = assert!(F16::MAX_10_EXP == 4);
+    const _: () = assert!(BF16::MAX_10_EXP == 38);
+    const _: () = assert!(F8E4M3FN::MAX_10_EXP == 2);
+    const _: () = assert!(F4E2M1FN::MAX_10_EXP == 0);
+    const _: () = assert!(F6E3M2FN::MAX_10_EXP == 1);
 }
