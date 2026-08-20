@@ -559,15 +559,15 @@ macro_rules! __minifloat {
             pub const HAS_NEG_ZERO: bool = Self::FORMAT.has_neg_zero();
 
             /// Total bitwidth
-            pub const BITWIDTH: u32 = 1 + Self::E + Self::M;
+            pub const BITWIDTH: u32 = <Self as $crate::Minifloat>::BITWIDTH;
 
             /// The radix of the internal representation
-            pub const RADIX: u32 = 2;
+            pub const RADIX: u32 = <Self as $crate::Minifloat>::RADIX;
 
             /// The number of digits in the significand, including the implicit leading bit
             ///
             /// Equal to [`M`][Self::M] + 1
-            pub const MANTISSA_DIGITS: u32 = $m + 1;
+            pub const MANTISSA_DIGITS: u32 = <Self as $crate::Minifloat>::MANTISSA_DIGITS;
 
             /// The maximum exponent
             ///
@@ -583,7 +583,7 @@ macro_rules! __minifloat {
             /// is no big deal to mistake it since [[`MIN_POSITIVE`][Self::MIN_POSITIVE],
             /// 2 &times; `MIN_POSITIVE`] is a buffer zone where numbers can be
             /// interpreted as normal or subnormal.
-            pub const MIN_EXP: i32 = 2 - Self::B;
+            pub const MIN_EXP: i32 = <Self as $crate::Minifloat>::MIN_EXP;
 
             /// Maximum <var>x</var> such that 10<sup>`x`</sup> is normal
             ///
@@ -603,27 +603,21 @@ macro_rules! __minifloat {
             ///
             /// When this is `true`, [`to_f32`][Self::to_f32] is bit-exact and an
             /// `impl From<Self> for f32` is provided.
-            pub const HAS_EXACT_F32_CONVERSION: bool = f32::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
-                && f32::MAX_EXP >= Self::MAX_EXP
-                && f32::MIN_EXP <= Self::MIN_EXP;
+            pub const HAS_EXACT_F32_CONVERSION: bool =
+                <Self as $crate::Minifloat>::HAS_EXACT_F32_CONVERSION;
 
             /// Whether every value of this type is exactly representable as [`f64`]
             ///
             /// When this is `true`, [`to_f64`][Self::to_f64] is bit-exact and an
             /// `impl From<Self> for f64` is provided.
-            pub const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
-                && f64::MAX_EXP >= Self::MAX_EXP
-                && f64::MIN_EXP <= Self::MIN_EXP;
+            pub const HAS_EXACT_F64_CONVERSION: bool =
+                <Self as $crate::Minifloat>::HAS_EXACT_F64_CONVERSION;
 
             /// Whether `x + y` and `x - y` may safely route through [`f32`]
-            pub const USE_F32_ADD: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
-                && f32::MAX_EXP > Self::MAX_EXP
-                && f32::MIN_EXP < Self::MIN_EXP;
+            pub const USE_F32_ADD: bool = <Self as $crate::Minifloat>::USE_F32_ADD;
 
             /// Whether `x * y` may safely route through [`f32`]
-            pub const USE_F32_MUL: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
-                && f32::MAX_EXP >= 2 * Self::MAX_EXP
-                && f32::MIN_EXP - 1 <= 2 * (Self::MIN_EXP - 1);
+            pub const USE_F32_MUL: bool = <Self as $crate::Minifloat>::USE_F32_MUL;
 
             /// The largest number of this type
             ///
