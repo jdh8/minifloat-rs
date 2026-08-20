@@ -1179,10 +1179,10 @@ macro_rules! __minifloat {
 
 /// Opt into the lossless `From` impls for both [`f32`] and [`f64`]
 macro_rules! lossless {
-    ($name:ident) => {
+    ($($name:ident)*) => {$(
         impl_from_minifloat_for_f32!($name);
         impl_from_minifloat_for_f64!($name);
-    };
+    )*};
 }
 
 // LLVM's set of floating-point types no wider than 16 bits.  Following LLVM,
@@ -1191,37 +1191,21 @@ macro_rules! lossless {
 // magnitude is the maximum value rather than a NaN.  Each generated type
 // documents its own format.
 minifloat!(pub struct F4E2M1FN(u8): 2, 1, Finite);
-lossless!(F4E2M1FN);
-
 minifloat!(pub struct F6E2M3FN(u8): 2, 3, Finite);
-lossless!(F6E2M3FN);
-
 minifloat!(pub struct F6E3M2FN(u8): 3, 2, Finite);
-lossless!(F6E3M2FN);
-
 minifloat!(pub struct F8E3M4(u8): 3, 4);
-lossless!(F8E3M4);
-
 minifloat!(pub struct F8E4M3(u8): 4, 3);
-lossless!(F8E4M3);
-
 minifloat!(pub struct F8E4M3FN(u8): 4, 3, FN);
-lossless!(F8E4M3FN);
-
 minifloat!(pub struct F8E4M3FNUZ(u8): 4, 3, FNUZ);
-lossless!(F8E4M3FNUZ);
-
 minifloat!(pub struct F8E4M3B11FNUZ(u8): 4, 3, 11, FNUZ);
-lossless!(F8E4M3B11FNUZ);
-
 minifloat!(pub struct F8E5M2(u8): 5, 2);
-lossless!(F8E5M2);
-
 minifloat!(pub struct F8E5M2FNUZ(u8): 5, 2, FNUZ);
-lossless!(F8E5M2FNUZ);
-
 minifloat!(pub struct F16(u16): 5, 10);
-lossless!(F16);
-
 minifloat!(pub struct BF16(u16): 8, 7);
-lossless!(BF16);
+
+// Every type above is narrow enough to be exact in both `f32` and `f64`.
+lossless! {
+    F4E2M1FN F6E2M3FN F6E3M2FN
+    F8E3M4 F8E4M3 F8E4M3FN F8E4M3FNUZ F8E4M3B11FNUZ F8E5M2 F8E5M2FNUZ
+    F16 BF16
+}
