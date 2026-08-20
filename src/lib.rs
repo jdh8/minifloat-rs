@@ -1094,9 +1094,9 @@ macro_rules! __minifloat {
 
         impl $crate::Minifloat for $name {
             type Bits = $bits;
-            const E: u32 = $e;
-            const M: u32 = $m;
-            const B: i32 = $b;
+            const E: u32 = $name::E;
+            const M: u32 = $name::M;
+            const B: i32 = $name::B;
             const FORMAT: $crate::Format = $name::FORMAT;
             const MAX_EXP: i32 = $name::MAX_EXP;
             const MAX_10_EXP: i32 = $name::MAX_10_EXP;
