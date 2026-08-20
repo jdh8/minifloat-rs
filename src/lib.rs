@@ -846,31 +846,9 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
-            #[allow(clippy::cast_possible_wrap)]
             pub fn from_f32(x: f32) -> Self {
-                if x.is_nan() {
-                    let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
-                    let magnitude = if Self::HAS_NAN { Self::NAN_BITS } else { Self::MAX.0 };
-                    return Self::from_bits(magnitude | sign_bit);
-                }
-
-                let bits = $crate::detail::round_f32_to_precision::<$m>(x).to_bits();
-                let sign_bit = ((bits >> 31) as $bits) << (Self::E + Self::M);
-                let diff = (Self::MIN_EXP - f32::MIN_EXP) << Self::M;
-                let magnitude = bits << 1 >> (f32::MANTISSA_DIGITS - Self::M);
-                let magnitude = magnitude as i32 - diff;
-
-                if magnitude < 1 << Self::M {
-                    let ticks = f64::from(x.abs()) * $crate::detail::exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let ticks = ticks.round_ties_even() as $bits;
-                    return Self::from_bits(
-                        (<$bits>::from(Self::HAS_NEG_ZERO || ticks != 0) * sign_bit) | ticks,
-                    );
-                }
-
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                Self::from_bits(magnitude.min(i32::from(Self::HUGE.to_bits())) as $bits | sign_bit)
+                // Widening to `f64` is exact, so this still rounds only once.
+                Self::from_f64(f64::from(x))
             }
 
             /// Probably lossy conversion from [`f64`]
@@ -880,146 +858,100 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
-            #[allow(clippy::cast_possible_wrap)]
             pub fn from_f64(x: f64) -> Self {
+                let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
+
                 if x.is_nan() {
-                    let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
                     let magnitude = if Self::HAS_NAN { Self::NAN_BITS } else { Self::MAX.0 };
                     return Self::from_bits(magnitude | sign_bit);
                 }
 
-                let bits = $crate::detail::round_f64_to_precision::<$m>(x).to_bits();
-                let sign_bit = ((bits >> 63) as $bits) << (Self::E + Self::M);
-                let diff = i64::from(Self::MIN_EXP - f64::MIN_EXP) << Self::M;
-                let magnitude = bits << 1 >> (f64::MANTISSA_DIGITS - Self::M);
-                let magnitude = magnitude as i64 - diff;
+                let (significand, exponent) = $crate::detail::decompose(x.abs());
 
-                if magnitude < 1 << Self::M {
-                    let ticks = x.abs() * $crate::detail::exp2i(Self::MANTISSA_DIGITS as i32 - Self::MIN_EXP);
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let ticks = ticks.round_ties_even() as $bits;
-                    return Self::from_bits(
-                        (<$bits>::from(Self::HAS_NEG_ZERO || ticks != 0) * sign_bit) | ticks,
-                    );
+                if significand == 0 {
+                    // Without a negative zero, signing a zero spells NaN.
+                    return Self::from_bits(<$bits>::from(Self::HAS_NEG_ZERO) * sign_bit);
                 }
+
+                // The exponent of `x`, i.e. `x.abs()` is in [2^e, 2^(e+1)).
+                #[allow(clippy::cast_possible_wrap)]
+                let e = exponent + (u64::BITS - 1 - significand.leading_zeros()) as i32;
+
+                #[allow(clippy::cast_possible_wrap)]
+                let magnitude = if e < Self::MIN_EXP - 1 {
+                    // Subnormal numbers all share the ULP of the smallest one,
+                    // so their code *is* the rounded multiple of that ULP.
+                    $crate::detail::round_to_scale(
+                        significand, exponent, Self::MIN_EXP - 1 - Self::M as i32)
+                } else {
+                    // Rounding to `MANTISSA_DIGITS` may carry into the implicit
+                    // bit.  That lands on the next exponent field with a zero
+                    // mantissa, which is exactly where the extra ULP belongs.
+                    let rounded = $crate::detail::round_to_scale(
+                        significand, exponent, e - Self::M as i32);
+                    (i64::from(e + Self::B) << Self::M) + rounded - (1 << Self::M)
+                };
 
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                Self::from_bits(magnitude.min(i64::from(Self::HUGE.to_bits())) as $bits | sign_bit)
-            }
-
-            /// Fast conversion to [`f32`]
-            ///
-            /// This method serves as a shortcut if conversion to [`f32`] is
-            /// lossless.
-            fn fast_to_f32(self) -> f32 {
-                let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
-                let magnitude = self.to_bits() & Self::ABS_MASK;
-
-                if self.is_nan() {
-                    return f32::NAN.copysign(sign);
-                }
-                if self.is_infinite() {
-                    return f32::INFINITY * sign;
-                }
-                if magnitude < 1 << Self::M {
-                    #[allow(clippy::cast_possible_wrap)]
-                    let shift = Self::MIN_EXP - Self::MANTISSA_DIGITS as i32;
-                    #[allow(clippy::cast_possible_truncation)]
-                    return ($crate::detail::exp2i(shift) * f64::from(sign) * f64::from(magnitude)) as f32;
-                }
-                let shift = f32::MANTISSA_DIGITS - Self::MANTISSA_DIGITS;
-                #[allow(clippy::cast_sign_loss)]
-                let diff = (Self::MIN_EXP - f32::MIN_EXP) as u32;
-                let diff = diff << (f32::MANTISSA_DIGITS - 1);
-                let sign = u32::from(self.is_sign_negative()) << 31;
-                f32::from_bits(((u32::from(magnitude) << shift) + diff) | sign)
-            }
-
-            /// Fast conversion to [`f64`]
-            ///
-            /// This method serves as a shortcut if conversion to [`f64`] is
-            /// lossless.
-            fn fast_to_f64(self) -> f64 {
-                let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
-                let magnitude = self.to_bits() & Self::ABS_MASK;
-
-                if self.is_nan() {
-                    return f64::NAN.copysign(sign);
-                }
-                if self.is_infinite() {
-                    return f64::INFINITY * sign;
-                }
-                if magnitude < 1 << Self::M {
-                    #[allow(clippy::cast_possible_wrap)]
-                    let shift = Self::MIN_EXP - Self::MANTISSA_DIGITS as i32;
-                    return $crate::detail::exp2i(shift) * sign * f64::from(magnitude);
-                }
-                let shift = f64::MANTISSA_DIGITS - Self::MANTISSA_DIGITS;
-                #[allow(clippy::cast_sign_loss)]
-                let diff = (Self::MIN_EXP - f64::MIN_EXP) as u64;
-                let diff = diff << (f64::MANTISSA_DIGITS - 1);
-                let sign = u64::from(self.is_sign_negative()) << 63;
-                f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
-            }
-
-            /// Lossy conversion to [`f64`]
-            ///
-            /// This variant assumes that the conversion is lossy only when the exponent
-            /// is out of range.
-            fn as_f64(self) -> f64 {
-                let bias = (1 << (Self::E - 1)) - 1;
-                let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
-                let magnitude = self.abs().to_bits();
-
-                if self.is_nan() {
-                    return f64::NAN.copysign(sign);
-                }
-                if self.is_infinite() {
-                    return f64::INFINITY * sign;
-                }
-                if i32::from(magnitude) >= (f64::MAX_EXP + bias) << Self::M {
-                    return f64::INFINITY * sign;
-                }
-                if magnitude < 1 << Self::M {
-                    #[allow(clippy::cast_possible_wrap)]
-                    let shift = Self::MIN_EXP - Self::MANTISSA_DIGITS as i32;
-                    return $crate::detail::exp2i(shift) * sign * f64::from(magnitude);
-                }
-                if i32::from(magnitude >> Self::M) < f64::MIN_EXP + bias {
-                    let significand = (magnitude & ((1 << Self::M) - 1)) | 1 << Self::M;
-                    let exponent = i32::from(magnitude >> Self::M) - bias;
-                    #[allow(clippy::cast_possible_wrap)]
-                    return $crate::detail::exp2i(exponent - Self::M as i32) * sign * f64::from(significand);
-                }
-                let shift = f64::MANTISSA_DIGITS - Self::MANTISSA_DIGITS;
-                #[allow(clippy::cast_sign_loss)]
-                let diff = (Self::MIN_EXP - f64::MIN_EXP) as u64;
-                let diff = diff << (f64::MANTISSA_DIGITS - 1);
-                let sign = u64::from(self.is_sign_negative()) << 63;
-                f64::from_bits(((u64::from(magnitude) << shift) + diff) | sign)
+                let magnitude = magnitude.min(i64::from(Self::HUGE.0)) as $bits;
+                // A value that rounds to zero drops its sign for the same
+                // reason a zero does.
+                let signed = <$bits>::from(Self::HAS_NEG_ZERO || magnitude != 0);
+                Self::from_bits(magnitude | (signed * sign_bit))
             }
 
             /// Best effort conversion to [`f64`]
+            ///
+            /// This is exact unless the exponent leaves [`f64`]'s range, where
+            /// the result rounds, overflows, or underflows like any other
+            /// [`f64`] computation.
             #[must_use]
             pub fn to_f64(self) -> f64 {
-                if Self::HAS_EXACT_F64_CONVERSION {
-                    self.fast_to_f64()
-                } else {
-                    self.as_f64()
+                let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
+
+                if self.is_nan() {
+                    return f64::NAN.copysign(sign);
                 }
+                if self.is_infinite() {
+                    return f64::INFINITY * sign;
+                }
+
+                let magnitude = self.to_bits() & Self::ABS_MASK;
+                let field = magnitude >> Self::M;
+
+                #[allow(clippy::cast_possible_wrap, clippy::cast_lossless)]
+                let (significand, exponent) = if field == 0 {
+                    (magnitude, 1 - Self::B - Self::M as i32)
+                } else {
+                    (
+                        (magnitude & ((1 << Self::M) - 1)) | 1 << Self::M,
+                        field as i32 - Self::B - Self::M as i32,
+                    )
+                };
+
+                // Splitting the scale keeps either factor inside `f64`'s
+                // exponent range, so the first product is exact and the second
+                // rounds at most once.  A single `exp2i` would flush to zero or
+                // to infinity long before the product does.
+                let head = exponent.clamp(f64::MIN_EXP - 1, f64::MAX_EXP - 1);
+                sign * f64::from(significand)
+                    * $crate::detail::exp2i(head)
+                    * $crate::detail::exp2i(exponent - head)
             }
 
             /// Best effort conversion to [`f32`]
             #[must_use]
             pub fn to_f32(self) -> f32 {
-                if Self::HAS_EXACT_F32_CONVERSION {
-                    return self.fast_to_f32();
+                if self.is_nan() {
+                    // A narrowing cast is not specified to keep the NaN sign.
+                    let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
+                    return f32::NAN.copysign(sign);
                 }
-                // Conversion to `f64` is lossy only when then exponent width is
-                // too large.  In this case, a second conversion to `f32` is
-                // safe.
+                // Conversion to `f64` is exact but for exponents out of its
+                // range, which are out of `f32`'s range too.  Either way the
+                // cast below is the only rounding.
                 #[allow(clippy::cast_possible_truncation)]
-                return self.to_f64() as f32;
+                { self.to_f64() as f32 }
             }
         }
 

@@ -24,24 +24,52 @@ pub const fn exp2i(x: i32) -> f64 {
     })
 }
 
-/// Round to the nearest representable value with `M` explicit bits of precision
+/// Decompose a [`f64`] into an exact `(significand, exponent)` pair
+///
+/// The value is <var>significand</var> &times;
+/// 2<sup><var>exponent</var></sup> with no hidden bits, subnormal inputs
+/// included.  The sign is dropped, so callers pass a magnitude.
 #[must_use]
-pub const fn round_f32_to_precision<const M: u32>(x: f32) -> f32 {
-    let x = x.to_bits();
-    let shift = f32::MANTISSA_DIGITS - 1 - M;
-    let ulp = 1 << shift;
-    let bias = (ulp >> 1) - (!(x >> shift) & 1);
-    f32::from_bits((x + bias) & !(ulp - 1))
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub const fn decompose(x: f64) -> (u64, i32) {
+    let bits = x.to_bits();
+    let field = (bits >> (f64::MANTISSA_DIGITS - 1)) as i32;
+    let fraction = bits & ((1 << (f64::MANTISSA_DIGITS - 1)) - 1);
+
+    if field == 0 {
+        (fraction, f64::MIN_EXP - f64::MANTISSA_DIGITS as i32)
+    } else {
+        (
+            fraction | 1 << (f64::MANTISSA_DIGITS - 1),
+            field + f64::MIN_EXP - 1 - f64::MANTISSA_DIGITS as i32,
+        )
+    }
 }
 
-/// Round to the nearest representable value with `M` explicit bits of precision
+/// Round <var>significand</var> &times; 2<sup><var>exponent</var></sup> to a
+/// multiple of 2<sup><var>target</var></sup>
+///
+/// Ties go to even, which is what IEEE 754 rounds to by default.  Working on
+/// an integer significand keeps this exact for exponents far outside the range
+/// of any hardware float.
+///
+/// The caller is responsible for the quotient fitting in an [`i64`]; a
+/// minifloat code is at most 16 bits wide, so every call here has room to
+/// spare.
 #[must_use]
-pub const fn round_f64_to_precision<const M: u32>(x: f64) -> f64 {
-    let x = x.to_bits();
-    let shift = f64::MANTISSA_DIGITS - 1 - M;
-    let ulp = 1 << shift;
-    let bias = (ulp >> 1) - (!(x >> shift) & 1);
-    f64::from_bits((x + bias) & !(ulp - 1))
+pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64 {
+    let shift = target - exponent;
+
+    if shift <= 0 {
+        return (significand << -shift) as i64;
+    }
+    if shift >= u64::BITS as i32 {
+        return 0;
+    }
+    let dropped = significand & ((1 << shift) - 1);
+    let kept = significand >> shift;
+    let half = 1 << (shift - 1);
+    (kept + (dropped > half || dropped == half && kept & 1 != 0) as u64) as i64
 }
 
 /// log<sub>2</sub>(1 &minus; 2<sup>&minus;`p`</sup>) indexed by precision `p`
