@@ -413,7 +413,9 @@ macro_rules! impl_from_minifloat_for_f64 {
 /// * `$e`: exponent bit-width
 /// * `$m`: explicit significand (mantissa) bit-width
 /// * `$b`: exponent bias, which defaults to 2<sup>`$e`&minus;1</sup> &minus; 1
-///   for every format but `FNUZ`, whose default is 2<sup>`$e`&minus;1</sup>
+///   for every format but `FNUZ`, whose default is 2<sup>`$e`&minus;1</sup>.
+///   Omitting `$n` leaves a bare identifier here ambiguous with a format, so
+///   parenthesize a named bias as `(MY_BIAS)`.
 /// * `$n`: format, naming a variant of [`Format`]:
 ///   [`Finite`](Format::Finite), [`IEEE`](Format::IEEE), [`FN`](Format::FN),
 ///   [`FNUZ`](Format::FNUZ)
@@ -470,17 +472,14 @@ macro_rules! minifloat {
             pub const NAN: Self = Self(Self::NAN_BITS);
         }
     };
-    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, Finite) => {
-        $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, Finite);
-    };
-    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, IEEE) => {
-        $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, IEEE);
-    };
-    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, FN) => {
-        $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, FN);
-    };
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, FNUZ) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, 1 << ($e - 1), FNUZ);
+    };
+    // Every other format shares the IEEE default bias.  This arm is why a bare
+    // identifier in the third position is a format, not a bias; parenthesize a
+    // named bias as `($b)` to reach the arm below.
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $format:ident) => {
+        $crate::minifloat!($vis struct $name($bits): $e, $m, (1 << ($e - 1)) - 1, $format);
     };
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr) => {
         $crate::minifloat!($vis struct $name($bits): $e, $m, $b, IEEE);
