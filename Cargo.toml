@@ -19,3 +19,7 @@ bench = false
 [[bench]]
 name = "arith"
 harness = false
+
+[[bench]]
+name = "predicates"
+harness = false
