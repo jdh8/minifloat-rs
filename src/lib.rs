@@ -19,10 +19,6 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for u8 {}
     impl Sealed for u16 {}
-    impl Sealed for u32 {}
-    impl Sealed for u64 {}
-    impl Sealed for u128 {}
-    impl Sealed for usize {}
 }
 
 /// Encoding format of a minifloat
@@ -117,11 +113,11 @@ pub trait Minifloat:
     + core::ops::Mul<Output = Self>
     + core::ops::Div<Output = Self>
 {
-    /// Storage type — restricted to the unsigned primitive integers
+    /// Storage type — either [`u8`] or [`u16`]
+    ///
+    /// A minifloat is a sign bit plus fewer than 16 magnitude bits, so no
+    /// wider integer can ever be the right storage.
     type Bits: sealed::Sealed + Copy + Default + Eq + 'static;
-
-    /// Whether the type is signed
-    const S: bool = true;
 
     /// Exponent bit-width
     const E: u32;
@@ -142,7 +138,9 @@ pub trait Minifloat:
     const HAS_NEG_ZERO: bool = Self::FORMAT.has_neg_zero();
 
     /// Total bitwidth
-    const BITWIDTH: u32 = Self::S as u32 + Self::E + Self::M;
+    ///
+    /// Equal to 1 + [`E`][Self::E] + [`M`][Self::M]; every minifloat is signed.
+    const BITWIDTH: u32 = 1 + Self::E + Self::M;
 
     /// The radix of the internal representation
     const RADIX: u32 = 2;
