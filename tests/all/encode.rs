@@ -17,7 +17,7 @@ use core::fmt::Debug;
 /// The value is `significand` &times; 2<sup>`exponent`</sup> with no hidden
 /// bits, so the pair can be compared and scaled without rounding.  The sign is
 /// dropped; callers pass a magnitude.
-fn decompose(x: f64) -> (u64, i32) {
+pub(crate) fn decompose(x: f64) -> (u64, i32) {
     let bits = x.to_bits();
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let field = (bits >> (f64::MANTISSA_DIGITS - 1)) as i32;
@@ -37,14 +37,16 @@ fn decompose(x: f64) -> (u64, i32) {
 /// Compare two non-negative `significand` &times; 2<sup>`exponent`</sup> pairs
 ///
 /// The comparison is exact for any exponents, which the plain product is not:
-/// both operands here routinely sit outside [`f64`]'s range.
-fn cmp_scaled(a: (u64, i32), b: (u64, i32)) -> Ordering {
+/// both operands here routinely sit outside [`f64`]'s range.  The significands
+/// are [`u128`] because an exact sum of two operands needs more room than
+/// either of them.
+pub(crate) fn cmp_scaled(a: (u128, i32), b: (u128, i32)) -> Ordering {
     if a.0 == 0 || b.0 == 0 {
         return a.0.cmp(&b.0);
     }
     #[allow(clippy::cast_possible_wrap)]
-    let leading = |(significand, exponent): (u64, i32)| {
-        exponent + (u64::BITS - 1 - significand.leading_zeros()) as i32
+    let leading = |(significand, exponent): (u128, i32)| {
+        exponent + (u128::BITS - 1 - significand.leading_zeros()) as i32
     };
     match leading(a).cmp(&leading(b)) {
         Ordering::Equal => {}
@@ -53,17 +55,18 @@ fn cmp_scaled(a: (u64, i32), b: (u64, i32)) -> Ordering {
     // Equal leading-bit positions bound the exponent gap by the significand
     // width, so neither shift below can lose a bit.
     if a.1 >= b.1 {
-        (u128::from(a.0) << (a.1 - b.1)).cmp(&u128::from(b.0))
+        (a.0 << (a.1 - b.1)).cmp(&b.0)
     } else {
-        u128::from(a.0).cmp(&(u128::from(b.0) << (b.1 - a.1)))
+        a.0.cmp(&(b.0 << (b.1 - a.1)))
     }
 }
 
 /// Exact value of a magnitude code, as `significand` &times; 2<sup>`exponent`</sup>
 ///
-/// This is the textbook decoding [`oracle`] uses, kept exact and extended one
-/// code past the maximum so the overflow boundary has a candidate of its own.
-fn code_value<T: Minifloat>(code: Mask) -> (u64, i32) {
+/// This is the textbook decoding [`reference_round`] uses, kept exact and
+/// extended one code past the maximum so the overflow boundary has a candidate
+/// of its own.
+pub(crate) fn code_value<T: Minifloat>(code: Mask) -> (u64, i32) {
     let field = code >> T::M;
     let fraction = code & bit_mask(T::M);
 
@@ -89,37 +92,31 @@ fn huge_and_max<T: Minifloat>() -> (Mask, Mask) {
     (huge, huge - Mask::from(T::FORMAT == Format::IEEE))
 }
 
-/// Correctly rounded encoding of `x`, derived from the format alone
+/// Correctly rounded encoding of a value reachable only by comparison
 ///
-/// The crate encodes by shifting exponent fields around; this one brackets `x`
-/// between two neighbouring codes and picks the nearer, so the two share no
-/// arithmetic.  Ties go to the even code, overflow to `HUGE`, and a NaN to the
-/// format's NaN pattern (or to &plusmn;`MAX` where the format has none).
-pub(crate) fn reference_encode<T: Minifloat>(x: f64) -> T
+/// `cmp` reports how the exact value compares against a `significand` &times;
+/// 2<sup>`exponent`</sup> pair, which is all rounding needs: the search
+/// brackets the value between two neighbouring codes and the midpoint decides
+/// which is nearer.  The value itself never has to be a number any float type
+/// can hold, so an exact sum, product, or quotient can referee itself.
+///
+/// Ties go to the even code and overflow to `HUGE`.
+pub(crate) fn reference_round<T: Minifloat>(
+    negative: bool,
+    cmp: impl Fn((u64, i32)) -> Ordering,
+) -> T
 where
     T::Bits: TryFrom<Mask>,
 {
-    let sign_bit = Mask::from(x.is_sign_negative()) << (T::E + T::M);
     let (huge, max) = huge_and_max::<T>();
 
-    if x.is_nan() {
-        let magnitude = match T::FORMAT {
-            Format::Finite => max,
-            Format::IEEE => bit_mask(T::E + 1) << (T::M - 1),
-            Format::FN => bit_mask(T::E + T::M),
-            _ => 1 << (T::E + T::M), // FNUZ: the would-be negative zero
-        };
-        return T::from_bits(narrow::<T>(magnitude | sign_bit));
-    }
-
-    // Code values increase monotonically, so a binary search brackets `x`.
-    let magnitude = decompose(x.abs());
+    // Code values increase monotonically, so a binary search brackets the value.
     let mut lo = 0;
     let mut hi = max + 1;
 
     while lo < hi {
         let mid = (lo + hi).div_ceil(2);
-        if cmp_scaled(code_value::<T>(mid), magnitude) == Ordering::Greater {
+        if cmp(code_value::<T>(mid)) == Ordering::Less {
             hi = mid - 1;
         } else {
             lo = mid;
@@ -132,7 +129,7 @@ where
         let (significand, exponent) = code_value::<T>(lo);
         // Neighbouring codes differ by exactly one ULP of the lower one, so
         // their midpoint is `(2 * significand + 1) / 2` at the same scale.
-        let up = match cmp_scaled(magnitude, (2 * significand + 1, exponent - 1)) {
+        let up = match cmp((2 * significand + 1, exponent - 1)) {
             Ordering::Less => false,
             Ordering::Greater => true,
             Ordering::Equal => lo & 1 == 1,
@@ -142,7 +139,37 @@ where
 
     // Without a negative zero, signing a zero would spell NaN instead.
     let signed = T::HAS_NEG_ZERO || code != 0;
+    let sign_bit = Mask::from(negative) << (T::E + T::M);
     T::from_bits(narrow::<T>(code | (Mask::from(signed) * sign_bit)))
+}
+
+/// Correctly rounded encoding of `x`, derived from the format alone
+///
+/// The crate encodes by shifting exponent fields around; this one brackets `x`
+/// between two neighbouring codes and picks the nearer, so the two share no
+/// arithmetic.  Ties go to the even code, overflow to `HUGE`, and a NaN to the
+/// format's NaN pattern (or to &plusmn;`MAX` where the format has none).
+pub(crate) fn reference_encode<T: Minifloat>(x: f64) -> T
+where
+    T::Bits: TryFrom<Mask>,
+{
+    if x.is_nan() {
+        let (_, max) = huge_and_max::<T>();
+        let magnitude = match T::FORMAT {
+            Format::Finite => max,
+            Format::IEEE => bit_mask(T::E + 1) << (T::M - 1),
+            Format::FN => bit_mask(T::E + T::M),
+            _ => 1 << (T::E + T::M), // FNUZ: the would-be negative zero
+        };
+        let sign_bit = Mask::from(x.is_sign_negative()) << (T::E + T::M);
+        return T::from_bits(narrow::<T>(magnitude | sign_bit));
+    }
+
+    let (significand, exponent) = decompose(x.abs());
+    let magnitude = (u128::from(significand), exponent);
+    reference_round(x.is_sign_negative(), |(s, e)| {
+        cmp_scaled(magnitude, (u128::from(s), e))
+    })
 }
 
 /// Every input that changes which way `T` rounds
