@@ -11,8 +11,6 @@ use minifloat::{
     F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
 };
 
-use num_traits::AsPrimitive;
-
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{BuildHasher, Hash};
@@ -31,6 +29,19 @@ const fn bit_mask(width: u32) -> Mask {
         0
     } else {
         !0 >> (Mask::BITS - width)
+    }
+}
+
+/// Narrow a bit pattern to a minifloat's storage
+///
+/// A minifloat is at most 16 bits wide, so the conversion always succeeds.
+fn narrow<T: Minifloat>(bits: Mask) -> T::Bits
+where
+    T::Bits: TryFrom<Mask>,
+{
+    match bits.try_into() {
+        Ok(narrowed) => narrowed,
+        Err(_) => unreachable!("a minifloat is narrower than its storage"),
     }
 }
 
@@ -70,9 +81,9 @@ fn same_mini<T: Minifloat>(x: T, y: T) -> bool {
 /// Iterate over all representations of a minifloat type
 fn for_all<T: Minifloat>(f: impl Fn(T) -> bool) -> bool
 where
-    Mask: AsPrimitive<T::Bits>,
+    T::Bits: TryFrom<Mask>,
 {
-    (0..=bit_mask(T::BITWIDTH)).all(|bits| f(T::from_bits(bits.as_())))
+    (0..=bit_mask(T::BITWIDTH)).all(|bits| f(T::from_bits(narrow::<T>(bits))))
 }
 
 /// Wrapper trait for checking properties of minifloats
@@ -83,7 +94,7 @@ trait Check {
     /// Check properties of a minifloat type
     fn check<T: Minifloat + Debug + Hash>() -> bool
     where
-        Mask: AsPrimitive<T::Bits>;
+        T::Bits: TryFrom<Mask>;
 }
 
 fn test_8_bits<T: Check>(_: T) {
@@ -176,7 +187,7 @@ fn test_eq() {
     impl Check for CheckEq {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             let fixed_point = if T::M == 0 { 2.0 } else { 3.0 };
             assert!(same_f32(T::from_f32(fixed_point).to_f32(), fixed_point));
@@ -184,7 +195,7 @@ fn test_eq() {
             let fixed_point = f64::from(fixed_point);
             assert!(same_f64(T::from_f64(fixed_point).to_f64(), fixed_point));
 
-            assert!(T::ZERO.to_bits() == 0.as_());
+            assert!(T::ZERO.to_bits() == narrow::<T>(0));
             assert_eq!(T::ZERO, T::from_f32(0.0));
             assert_eq!(T::ZERO, T::from_f32(-0.0));
 
@@ -235,7 +246,7 @@ fn test_neg() {
     impl Check for CheckNeg {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             for_all::<T>(|x| x.to_bits() == (-(-x)).to_bits())
         }
@@ -250,7 +261,7 @@ fn test_partial_cmp() {
     impl Check for CheckOrd {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             for_all::<T>(|x| {
                 for_all::<T>(|y| x.partial_cmp(&y) == x.to_f32().partial_cmp(&y.to_f32()))
@@ -266,14 +277,14 @@ fn test_classify() {
     impl Check for CheckClassify {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             for_all::<T>(|x| {
                 u32::from(x.is_nan()) << FpCategory::Nan as u8
                     | u32::from(x.is_infinite()) << FpCategory::Infinite as u8
                     | u32::from(x.is_normal()) << FpCategory::Normal as u8
                     | u32::from(x.is_subnormal()) << FpCategory::Subnormal as u8
-                    | u32::from(x == T::from_bits(0.as_())) << FpCategory::Zero as u8
+                    | u32::from(x == T::from_bits(narrow::<T>(0))) << FpCategory::Zero as u8
                     == 1 << x.classify() as u8
             })
         }
@@ -288,7 +299,7 @@ fn test_to_f32() {
     impl Check for CheckToF32 {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             assert!(same_f32(T::ZERO.to_f32(), 0.0));
             assert!(same_f32(
@@ -311,7 +322,7 @@ fn test_to_f64() {
     impl Check for CheckToF64 {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             assert!(same_f64(T::ZERO.to_f64(), 0.0));
             assert!(same_f64(
@@ -333,7 +344,7 @@ fn test_to_floats() {
     impl Check for CheckToFloats {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             !T::HAS_EXACT_F32_CONVERSION
                 || for_all::<T>(|x| same_f64(x.to_f32().into(), x.to_f64()))
@@ -349,7 +360,7 @@ fn test_arithmetic_matches_f64() {
     impl Check for CheckArith {
         fn check<T: Minifloat + Debug + Hash>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             for_all::<T>(|x| {
                 for_all::<T>(|y| {
@@ -410,7 +421,7 @@ fn test_has_exact_conversion_consts() {
 fn test_from_lossless() {
     fn check<T: Minifloat + Debug + Into<f32> + Into<f64>>() -> bool
     where
-        Mask: AsPrimitive<T::Bits>,
+        T::Bits: TryFrom<Mask>,
     {
         for_all::<T>(|x| {
             let via_from_f32: f32 = x.into();
@@ -438,7 +449,7 @@ fn test_integer_decode_reconstruction() {
     impl Check for CheckIntegerDecode {
         fn check<T: Minifloat + Debug + Hash>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             for_all::<T>(|x| {
                 let (mantissa, exponent, sign) = x.integer_decode();
@@ -469,7 +480,7 @@ fn test_hash_consistent_with_eq() {
     impl Check for CheckHash {
         fn check<T: Minifloat + Debug + Hash>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             let state = std::collections::hash_map::RandomState::new();
             for_all::<T>(|x| {
@@ -518,7 +529,7 @@ fn oracle(bits: Mask, e_width: u32, m_width: u32, bias: i32, format: Format) -> 
 /// type declared with the wrong exponent bias or the wrong format fails here.
 fn check_oracle<T: Minifloat>(e_width: u32, m_width: u32, bias: i32, format: Format)
 where
-    Mask: AsPrimitive<T::Bits>,
+    T::Bits: TryFrom<Mask>,
 {
     assert_eq!((T::E, T::M, T::B), (e_width, m_width, bias));
     assert_eq!(T::FORMAT, format);
@@ -528,7 +539,7 @@ where
 
     for bits in 0..=bit_mask(T::BITWIDTH) {
         let expected = oracle(bits, e_width, m_width, bias, format);
-        let actual = T::from_bits(bits.as_()).to_f64();
+        let actual = T::from_bits(narrow::<T>(bits)).to_f64();
         assert!(
             same_f64(actual, expected),
             "bits {bits:#x}: got {actual}, expected {expected}"
@@ -683,7 +694,7 @@ fn huge_and_max<T: Minifloat>() -> (Mask, Mask) {
 /// format's NaN pattern (or to &plusmn;`MAX` where the format has none).
 fn reference_encode<T: Minifloat>(x: f64) -> T
 where
-    Mask: AsPrimitive<T::Bits>,
+    T::Bits: TryFrom<Mask>,
 {
     let sign_bit = Mask::from(x.is_sign_negative()) << (T::E + T::M);
     let (huge, max) = huge_and_max::<T>();
@@ -695,7 +706,7 @@ where
             Format::FN => bit_mask(T::E + T::M),
             _ => 1 << (T::E + T::M), // FNUZ: the would-be negative zero
         };
-        return T::from_bits((magnitude | sign_bit).as_());
+        return T::from_bits(narrow::<T>(magnitude | sign_bit));
     }
 
     // Code values increase monotonically, so a binary search brackets `x`.
@@ -728,7 +739,7 @@ where
 
     // Without a negative zero, signing a zero would spell NaN instead.
     let signed = T::HAS_NEG_ZERO || code != 0;
-    T::from_bits((code | (Mask::from(signed) * sign_bit)).as_())
+    T::from_bits(narrow::<T>(code | (Mask::from(signed) * sign_bit)))
 }
 
 /// Every input that changes which way `T` rounds
@@ -848,7 +859,7 @@ fn test_encode_correct_rounding() {
     impl Check for CheckEncode {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             for x in rounding_inputs::<T>() {
                 let expected = reference_encode::<T>(x);
@@ -883,7 +894,7 @@ fn test_encode_random_sweep() {
     impl Check for CheckSweep {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             let mut lcg = Lcg::new(0x1234_5678_9ABC_DEF0);
             for _ in 0..1 << 14 {
@@ -913,10 +924,10 @@ fn test_arithmetic_16bit_sampled() {
     impl Check for CheckArith16 {
         fn check<T: Minifloat + Debug>() -> bool
         where
-            Mask: AsPrimitive<T::Bits>,
+            T::Bits: TryFrom<Mask>,
         {
             let mut lcg = Lcg::new(0x0FED_CBA9_8765_4321);
-            let draw = |lcg: &mut Lcg| T::from_bits(Mask::from(lcg.next()).as_());
+            let draw = |lcg: &mut Lcg| T::from_bits(narrow::<T>(Mask::from(lcg.next()) & bit_mask(T::BITWIDTH)));
 
             for _ in 0..1 << 13 {
                 let x = draw(&mut lcg);

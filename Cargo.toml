@@ -8,7 +8,3 @@ repository = "https://github.com/jdh8/minifloat-rs"
 license = "MPL-2.0"
 categories = ["mathematics", "data-structures"]
 keywords = ["minifloat", "f16", "bfloat16"]
-
-[dev-dependencies]
-libm = "0.2"
-num-traits = "0.2"
