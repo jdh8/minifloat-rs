@@ -66,6 +66,35 @@ pub enum Format {
     FNUZ,
 }
 
+impl Format {
+    /// Whether this format has infinities
+    ///
+    /// This is `true` only for [`IEEE`](Self::IEEE), which reserves the
+    /// maximum exponent for them.
+    #[must_use]
+    pub const fn has_inf(self) -> bool {
+        matches!(self, Self::IEEE)
+    }
+
+    /// Whether this format has a NaN encoding
+    ///
+    /// This is `false` only for [`Finite`](Self::Finite), where every bit
+    /// pattern is a number.
+    #[must_use]
+    pub const fn has_nan(self) -> bool {
+        !matches!(self, Self::Finite)
+    }
+
+    /// Whether this format has a negative zero
+    ///
+    /// This is `false` only for [`FNUZ`](Self::FNUZ), which spends the
+    /// would-be &minus;0.0 encoding on NaN.
+    #[must_use]
+    pub const fn has_neg_zero(self) -> bool {
+        !matches!(self, Self::FNUZ)
+    }
+}
+
 /// Generic trait for minifloat types
 ///
 /// I am **not** going to implement [`num_traits::Float`][flt] because:
@@ -110,7 +139,7 @@ pub trait Minifloat:
     ///
     /// This is `false` only for [`FNUZ`](Format::FNUZ) formats, which spend the
     /// would-be &minus;0.0 encoding on NaN.
-    const HAS_NEG_ZERO: bool = !matches!(Self::FORMAT, Format::FNUZ);
+    const HAS_NEG_ZERO: bool = Self::FORMAT.has_neg_zero();
 
     /// Total bitwidth
     const BITWIDTH: u32 = Self::S as u32 + Self::E + Self::M;
@@ -521,13 +550,13 @@ macro_rules! __minifloat {
             pub const FORMAT: $crate::Format = $crate::Format::$format;
 
             /// Whether this format has infinities
-            pub const HAS_INF: bool = matches!(Self::FORMAT, $crate::Format::IEEE);
+            pub const HAS_INF: bool = Self::FORMAT.has_inf();
 
             /// Whether this format has a NaN encoding
-            pub const HAS_NAN: bool = !matches!(Self::FORMAT, $crate::Format::Finite);
+            pub const HAS_NAN: bool = Self::FORMAT.has_nan();
 
             /// Whether this format has a negative zero
-            pub const HAS_NEG_ZERO: bool = !matches!(Self::FORMAT, $crate::Format::FNUZ);
+            pub const HAS_NEG_ZERO: bool = Self::FORMAT.has_neg_zero();
 
             /// Total bitwidth
             pub const BITWIDTH: u32 = 1 + Self::E + Self::M;

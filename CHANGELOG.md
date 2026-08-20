@@ -20,7 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Minifloat::INFINITY` and `Minifloat::HAS_NEG_ZERO`.  Generic code could not
   reach an infinity at all before.
 - The public `Format` enum, an inherent `FORMAT` constant on every generated
-  type, and `Minifloat::FORMAT` for generic code.
+  type, and `Minifloat::FORMAT` for generic code.  `Format::has_inf`,
+  `Format::has_nan`, and `Format::has_neg_zero` answer what a format is without
+  naming a type.
 
 ### Changed
 
