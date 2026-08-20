@@ -684,10 +684,7 @@ macro_rules! __minifloat {
             /// Check if the value is finite, i.e. neither infinite nor NaN
             #[must_use]
             pub const fn is_finite(self) -> bool {
-                if Self::HAS_INF {
-                    return self.0 & Self::ABS_MASK < Self::HUGE.0;
-                }
-                !self.is_nan()
+                !self.is_nan() && !self.is_infinite()
             }
 
             /// Check if the value is [subnormal]
