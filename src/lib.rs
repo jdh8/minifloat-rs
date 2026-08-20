@@ -823,6 +823,7 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
+            #[inline]
             pub fn from_f32(x: f32) -> Self {
                 // Widening to `f64` is exact, so this still rounds only once.
                 Self::from_f64(f64::from(x))
@@ -835,6 +836,7 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
+            #[inline]
             pub fn from_f64(x: f64) -> Self {
                 let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
 
@@ -853,6 +855,7 @@ macro_rules! __minifloat {
             /// This is where every rounding in the crate happens.  The triple
             /// is an exact number, or one whose lowest bit is sticky, so it
             /// can come from an [`f64`] or from arithmetic of its own.
+            #[inline]
             fn from_parts(negative: bool, significand: u64, exponent: i32) -> Self {
                 let sign_bit = <$bits>::from(negative) << (Self::E + Self::M);
 
@@ -893,6 +896,7 @@ macro_rules! __minifloat {
             /// The inverse of [`from_parts`][Self::from_parts] where the value
             /// is representable: `significand` carries the implicit bit where
             /// the code has one, and `exponent` is the ULP scale of the code.
+            #[inline]
             const fn to_parts(self) -> (bool, u64, i32) {
                 let magnitude = (self.0 & Self::ABS_MASK) as u64;
                 let field = (magnitude >> Self::M) as i32;
@@ -928,6 +932,7 @@ macro_rules! __minifloat {
             /// the result rounds, overflows, or underflows like any other
             /// [`f64`] computation.
             #[must_use]
+            #[inline]
             pub fn to_f64(self) -> f64 {
                 let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
 
@@ -963,6 +968,7 @@ macro_rules! __minifloat {
 
             /// Best effort conversion to [`f32`]
             #[must_use]
+            #[inline]
             pub fn to_f32(self) -> f32 {
                 if self.is_nan() {
                     // A narrowing cast is not specified to keep the NaN sign.
@@ -1006,6 +1012,7 @@ macro_rules! __minifloat {
         impl core::ops::Neg for $name {
             type Output = Self;
 
+            #[inline]
             fn neg(self) -> Self::Output {
                 let sign = 1 << (Self::E + Self::M);
                 let magnitude = self.0 & Self::ABS_MASK;
@@ -1026,6 +1033,7 @@ macro_rules! __minifloat {
 
         impl core::ops::Add for $name {
             type Output = Self;
+            #[inline]
             fn add(self, rhs: Self) -> Self {
                 if self.is_nan() || rhs.is_nan() {
                     return Self::INVALID;
@@ -1051,6 +1059,7 @@ macro_rules! __minifloat {
 
         impl core::ops::Sub for $name {
             type Output = Self;
+            #[inline]
             fn sub(self, rhs: Self) -> Self {
                 self + -rhs
             }
@@ -1058,6 +1067,7 @@ macro_rules! __minifloat {
 
         impl core::ops::Mul for $name {
             type Output = Self;
+            #[inline]
             fn mul(self, rhs: Self) -> Self {
                 if self.is_nan() || rhs.is_nan() {
                     return Self::INVALID;
@@ -1079,6 +1089,7 @@ macro_rules! __minifloat {
 
         impl core::ops::Div for $name {
             type Output = Self;
+            #[inline]
             fn div(self, rhs: Self) -> Self {
                 if self.is_nan() || rhs.is_nan() {
                     return Self::INVALID;
@@ -1106,18 +1117,22 @@ macro_rules! __minifloat {
         }
 
         impl core::ops::AddAssign for $name {
+            #[inline]
             fn add_assign(&mut self, rhs: Self) { *self = *self + rhs; }
         }
 
         impl core::ops::SubAssign for $name {
+            #[inline]
             fn sub_assign(&mut self, rhs: Self) { *self = *self - rhs; }
         }
 
         impl core::ops::MulAssign for $name {
+            #[inline]
             fn mul_assign(&mut self, rhs: Self) { *self = *self * rhs; }
         }
 
         impl core::ops::DivAssign for $name {
+            #[inline]
             fn div_assign(&mut self, rhs: Self) { *self = *self / rhs; }
         }
 
@@ -1187,18 +1202,22 @@ macro_rules! __minifloat {
                 self.integer_decode()
             }
 
+            #[inline]
             fn from_f32(x: f32) -> Self {
                 Self::from_f32(x)
             }
 
+            #[inline]
             fn from_f64(x: f64) -> Self {
                 Self::from_f64(x)
             }
 
+            #[inline]
             fn to_f32(self) -> f32 {
                 Self::to_f32(self)
             }
 
+            #[inline]
             fn to_f64(self) -> f64 {
                 Self::to_f64(self)
             }

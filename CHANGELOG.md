@@ -68,6 +68,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subtractions ran serialized: `FNUZ` subtraction cost 17 ns against 11 ns for
   its own addition, and was the one operator a round trip through `f32` still
   beat.  It now matches its addition, and wins.
+- Every operator, both conversions in each direction, and the rounding core
+  behind them are now `#[inline]`.  Nothing here is generic, so a crate that
+  depends on this one used to reach each of them through a call.  Marking only
+  the public operators is worse than marking none &mdash; the caller inlines
+  `add`, whose body still calls out to `from_parts` and `to_parts`, so one call
+  becomes two &mdash; and marking those two private helpers as well is the whole
+  difference: 0.99x against 1.13x.  With the conversions along, a downstream
+  crate measures what `lto = "fat"` would have bought it, which this crate
+  cannot ask for: Cargo reads a profile only from the workspace root and
+  silently ignores one in a dependency.
 - `from_f32` widens to `f64` and `to_f32` casts down from `to_f64`, each still
   rounding exactly once.
 
