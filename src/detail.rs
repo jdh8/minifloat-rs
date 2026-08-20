@@ -14,6 +14,7 @@
 
 /// Fast 2<sup>`x`</sup> with bit manipulation
 #[must_use]
+#[inline]
 pub const fn exp2i(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
@@ -31,6 +32,7 @@ pub const fn exp2i(x: i32) -> f64 {
 /// included.  The sign is dropped, so callers pass a magnitude.
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+#[inline]
 pub const fn decompose(x: f64) -> (u64, i32) {
     let bits = x.to_bits();
     let field = (bits >> (f64::MANTISSA_DIGITS - 1)) as i32;
@@ -57,6 +59,7 @@ pub const fn decompose(x: f64) -> (u64, i32) {
 /// minifloat code is at most 16 bits wide, so every call here has room to
 /// spare.
 #[must_use]
+#[inline]
 pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64 {
     let shift = target - exponent;
 
@@ -110,6 +113,7 @@ const ALIGN_CAP: i32 = 46;
 ///
 /// An addend below that exponent is one [`ALIGN_CAP`] has already ruled out.
 #[allow(clippy::cast_possible_wrap)]
+#[inline]
 const fn align(negative: bool, significand: u64, exponent: i32, base: i32) -> i64 {
     let magnitude = if exponent >= base {
         (significand << (exponent - base)) as i64
@@ -129,6 +133,7 @@ const fn align(negative: bool, significand: u64, exponent: i32, base: i32) -> i6
 /// 2<sup>`exponent`</sup>, and so is the result.  The caller is responsible
 /// for the significands fitting in 15 bits, which every minifloat does.
 #[must_use]
+#[inline]
 pub const fn add_parts(
     negative: bool,
     significand: u64,
@@ -168,6 +173,7 @@ const QUOTIENT_BITS: u32 = 46;
 /// divisor and for both significands fitting in 15 bits.
 #[must_use]
 #[allow(clippy::cast_possible_wrap)]
+#[inline]
 pub const fn div_parts(
     significand: u64,
     exponent: i32,
