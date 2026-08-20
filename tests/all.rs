@@ -7,8 +7,8 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use minifloat::{
-    minifloat, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3, F8E4M3B11FNUZ,
-    F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
+    minifloat, Format, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3,
+    F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
 };
 
 use num_traits::AsPrimitive;
@@ -456,23 +456,10 @@ fn test_hash_consistent_with_eq() {
     test_most_8_bits(CheckHash);
 }
 
-/// Format of a minifloat, spelled out independently of the crate
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Format {
-    /// Every bit pattern is a finite number
-    Finite,
-    /// Maximum exponent reserved for ±∞ and NaN
-    Ieee,
-    /// All-ones magnitude reserved for NaN
-    Fn,
-    /// &minus;0.0 encoding reserved for NaN
-    Fnuz,
-}
-
 /// Textbook value of a bit pattern, computed from the raw fields
 ///
-/// This deliberately shares no code with the crate: it is the definition a
-/// human would read off the format specification.
+/// The value computation deliberately shares no code with the crate: it is
+/// the definition a human would read off the format specification.
 fn oracle(bits: Mask, e_width: u32, m_width: u32, bias: i32, format: Format) -> f64 {
     let sign = bits >> (e_width + m_width) & 1;
     let exponent = bits >> m_width & bit_mask(e_width);
@@ -480,13 +467,13 @@ fn oracle(bits: Mask, e_width: u32, m_width: u32, bias: i32, format: Format) -> 
     let sign = if sign == 1 { -1.0 } else { 1.0 };
 
     match format {
-        Format::Ieee if exponent == bit_mask(e_width) => {
+        Format::IEEE if exponent == bit_mask(e_width) => {
             return if mantissa == 0 { sign * f64::INFINITY } else { f64::NAN };
         }
-        Format::Fn if exponent == bit_mask(e_width) && mantissa == bit_mask(m_width) => {
+        Format::FN if exponent == bit_mask(e_width) && mantissa == bit_mask(m_width) => {
             return f64::NAN;
         }
-        Format::Fnuz if sign < 0.0 && exponent == 0 && mantissa == 0 => return f64::NAN,
+        Format::FNUZ if sign < 0.0 && exponent == 0 && mantissa == 0 => return f64::NAN,
         _ => {}
     }
 
@@ -509,9 +496,10 @@ where
     Mask: AsPrimitive<T::Bits>,
 {
     assert_eq!((T::E, T::M, T::B), (e_width, m_width, bias));
+    assert_eq!(T::FORMAT, format);
     assert_eq!(T::NAN.is_some(), format != Format::Finite);
-    assert_eq!(T::INFINITY.is_some(), format == Format::Ieee);
-    assert_eq!(T::HAS_NEG_ZERO, format != Format::Fnuz);
+    assert_eq!(T::INFINITY.is_some(), format == Format::IEEE);
+    assert_eq!(T::HAS_NEG_ZERO, format != Format::FNUZ);
 
     for bits in 0..=bit_mask(T::BITWIDTH) {
         let expected = oracle(bits, e_width, m_width, bias, format);
@@ -528,15 +516,15 @@ fn test_predefined_types_match_their_specification() {
     check_oracle::<F4E2M1FN>(2, 1, 1, Format::Finite);
     check_oracle::<F6E2M3FN>(2, 3, 1, Format::Finite);
     check_oracle::<F6E3M2FN>(3, 2, 3, Format::Finite);
-    check_oracle::<F8E3M4>(3, 4, 3, Format::Ieee);
-    check_oracle::<F8E4M3>(4, 3, 7, Format::Ieee);
-    check_oracle::<F8E4M3FN>(4, 3, 7, Format::Fn);
-    check_oracle::<F8E4M3FNUZ>(4, 3, 8, Format::Fnuz);
-    check_oracle::<F8E4M3B11FNUZ>(4, 3, 11, Format::Fnuz);
-    check_oracle::<F8E5M2>(5, 2, 15, Format::Ieee);
-    check_oracle::<F8E5M2FNUZ>(5, 2, 16, Format::Fnuz);
-    check_oracle::<F16>(5, 10, 15, Format::Ieee);
-    check_oracle::<BF16>(8, 7, 127, Format::Ieee);
+    check_oracle::<F8E3M4>(3, 4, 3, Format::IEEE);
+    check_oracle::<F8E4M3>(4, 3, 7, Format::IEEE);
+    check_oracle::<F8E4M3FN>(4, 3, 7, Format::FN);
+    check_oracle::<F8E4M3FNUZ>(4, 3, 8, Format::FNUZ);
+    check_oracle::<F8E4M3B11FNUZ>(4, 3, 11, Format::FNUZ);
+    check_oracle::<F8E5M2>(5, 2, 15, Format::IEEE);
+    check_oracle::<F8E5M2FNUZ>(5, 2, 16, Format::FNUZ);
+    check_oracle::<F16>(5, 10, 15, Format::IEEE);
+    check_oracle::<BF16>(8, 7, 127, Format::IEEE);
 }
 
 #[test]

@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type, plus an inherent `MAX_10_EXP`.
 - `Minifloat::INFINITY` and `Minifloat::HAS_NEG_ZERO`.  Generic code could not
   reach an infinity at all before.
+- The public `Format` enum, an inherent `FORMAT` constant on every generated
+  type, and `Minifloat::FORMAT` for generic code.
 
 ### Changed
 
@@ -33,13 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The types formerly in the `example` module are promoted to the crate root as
   supported API.
 - The `minifloat!` macro is now a thin format layer over a `__minifloat!`
-  engine.  Adding a format is five literals, and no site pattern-matches on a
-  format any more.
+  engine.  Each format arm now passes one `Format` variant instead of five
+  literals; the engine derives `HAS_INF`, `HAS_NAN`, `HAS_NEG_ZERO`, `HUGE`,
+  and the NaN bit pattern from it.
+- `Minifloat` gains a required `FORMAT` constant, and its `HAS_NEG_ZERO`
+  constant now defaults from `FORMAT`.
 
 ### Removed
 
-- The `NanStyle` enum and `Minifloat::N`.  A format is now identified by the
-  `HAS_INF` / `HAS_NAN` / `HAS_NEG_ZERO` properties it implies.
+- The `NanStyle` enum and `Minifloat::N`, superseded by `Format` and
+  `Minifloat::FORMAT`.
 - The `example` module.
 - `F8E3M4FN`, `F8E4M3B11`, and `F8E4M3B11FN`, which are not in LLVM's set.
   They remain one `minifloat!` line away.

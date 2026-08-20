@@ -25,12 +25,53 @@ mod sealed {
     impl Sealed for usize {}
 }
 
+/// Encoding format of a minifloat
+///
+/// This is the last argument of [`minifloat!`].  The last three names follow
+/// [LLVM/MLIR naming conventions][llvm] derived from their differences to
+/// [IEEE 754][ieee].
+///
+/// [llvm]: https://llvm.org/doxygen/structllvm_1_1APFloatBase.html
+/// [ieee]: https://en.wikipedia.org/wiki/IEEE_754
+#[allow(clippy::upper_case_acronyms)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Format {
+    /// Every bit pattern is a finite number
+    ///
+    /// There are neither infinities nor NaNs, so the all-ones magnitude is the
+    /// maximum finite value.  This is the format of the [OCP MX][ocp] sub-8-bit
+    /// types.
+    ///
+    /// [ocp]: https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf
+    Finite,
+
+    /// The maximum exponent is reserved for non-finite numbers
+    ///
+    /// The zero mantissa stands for infinity, while any other value is a NaN.
+    IEEE,
+
+    /// Finite with a special NaN encoding
+    ///
+    /// `F` is for finite, `N` for a special NaN encoding.  There are no
+    /// infinities.  The maximum magnitude, exponent and mantissa all ones, is
+    /// reserved for NaNs.
+    FN,
+
+    /// Finite with a special NaN encoding and unsigned zero
+    ///
+    /// `F` is for finite, `N` for a special NaN encoding, `UZ` for unsigned
+    /// zero.  There are no infinities, and the &minus;0.0 encoding is reserved
+    /// for NaN.
+    FNUZ,
+}
+
 /// Generic trait for minifloat types
 ///
 /// I am **not** going to implement [`num_traits::Float`][flt] because:
 ///
-/// 1. `FN` and `FNUZ` types do not have infinities.
-/// 2. `FNUZ` types do not have a negative zero.
+/// 1. [`FN`](Format::FN) and [`FNUZ`](Format::FNUZ) types do not have infinities.
+/// 2. [`FNUZ`](Format::FNUZ) types do not have a negative zero.
 ///
 /// Binary arithmetic (`+`, `-`, `*`, `/`) routes through [`f32`] when the
 /// type's precision and exponent range allow it, falling back to [`f64`]
@@ -62,11 +103,14 @@ pub trait Minifloat:
     /// Exponent bias
     const B: i32 = (1 << (Self::E - 1)) - 1;
 
+    /// The encoding format
+    const FORMAT: Format;
+
     /// Whether this format has a negative zero
     ///
-    /// This is `false` only for `FNUZ` formats, which spend the would-be
-    /// &minus;0.0 encoding on NaN.
-    const HAS_NEG_ZERO: bool;
+    /// This is `false` only for [`FNUZ`](Format::FNUZ) formats, which spend the
+    /// would-be &minus;0.0 encoding on NaN.
+    const HAS_NEG_ZERO: bool = !matches!(Self::FORMAT, Format::FNUZ);
 
     /// Total bitwidth
     const BITWIDTH: u32 = Self::S as u32 + Self::E + Self::M;
@@ -370,31 +414,14 @@ macro_rules! impl_from_minifloat_for_f64 {
 /// * `$m`: explicit significand (mantissa) bit-width
 /// * `$b`: exponent bias, which defaults to 2<sup>`$e`&minus;1</sup> &minus; 1
 ///   for every format but `FNUZ`, whose default is 2<sup>`$e`&minus;1</sup>
-/// * `$n`: format, one of `Finite`, `IEEE`, `FN`, `FNUZ`
-///
-/// The last three names follow [LLVM/MLIR naming conventions][llvm] derived
-/// from their differences to [IEEE 754][ieee]:
-///
-/// * `Finite` &mdash; every bit pattern is a finite number.  There are neither
-///   infinities nor NaNs, so the all-ones magnitude is the maximum finite
-///   value.  This is the format of the [OCP MX][ocp] sub-8-bit types.
-/// * `IEEE` &mdash; the maximum exponent is reserved for non-finite numbers.
-///   The zero mantissa stands for infinity, while any other value is a NaN.
-/// * `FN` &mdash; `F` is for finite, `N` for a special NaN encoding.  There are
-///   no infinities.  The maximum magnitude, exponent and mantissa all ones, is
-///   reserved for NaNs.
-/// * `FNUZ` &mdash; `F` is for finite, `N` for a special NaN encoding, `UZ` for
-///   unsigned zero.  There are no infinities, and the &minus;0.0 encoding is
-///   reserved for NaN.
+/// * `$n`: format, naming a variant of [`Format`]:
+///   [`Finite`](Format::Finite), [`IEEE`](Format::IEEE), [`FN`](Format::FN),
+///   [`FNUZ`](Format::FNUZ)
 ///
 /// A type declares an inherent `NAN` only if its format has a NaN encoding,
 /// and inherent `INFINITY` / `NEG_INFINITY` only if it has infinities.  Generic
 /// code reaches them through [`Minifloat::NAN`] and [`Minifloat::INFINITY`],
 /// which are [`Option`]s.
-///
-/// [llvm]: https://llvm.org/doxygen/structllvm_1_1APFloatBase.html
-/// [ieee]: https://en.wikipedia.org/wiki/IEEE_754
-/// [ocp]: https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf
 ///
 /// ## Constraints
 ///
@@ -411,13 +438,10 @@ macro_rules! impl_from_minifloat_for_f64 {
 #[macro_export]
 macro_rules! minifloat {
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, Finite) => {
-        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, false, false, true,
-            Finite, Self::ABS_MASK, 0);
+        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, Finite);
     };
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, IEEE) => {
-        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, true, true, true,
-            IEEE, ((1 << Self::E) - 1) << Self::M,
-            ((1 << (Self::E + 1)) - 1) << (Self::M - 1));
+        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, IEEE);
 
         impl $name {
             /// One representation of NaN
@@ -431,8 +455,7 @@ macro_rules! minifloat {
         }
     };
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, FN) => {
-        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, false, true, true,
-            FN, Self::ABS_MASK - 1, Self::ABS_MASK);
+        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, FN);
 
         impl $name {
             /// One representation of NaN
@@ -440,8 +463,7 @@ macro_rules! minifloat {
         }
     };
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, FNUZ) => {
-        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, false, true, false,
-            FNUZ, Self::ABS_MASK, 1 << (Self::E + Self::M));
+        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, FNUZ);
 
         impl $name {
             /// One representation of NaN
@@ -470,23 +492,23 @@ macro_rules! minifloat {
 
 /// Engine behind [`minifloat!`], instantiated by its format arms
 ///
-/// The format arms supply five facts — `has_inf`, `has_nan`, `has_neg_zero`,
-/// the bit pattern of [`HUGE`](Minifloat::HUGE), and the bit pattern of NaN.
-/// Everything else is derived from them.
+/// The format arm supplies a [`Format`] variant.  The engine derives the
+/// format's properties and special-value bit patterns from it.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __minifloat {
-    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr,
-        $has_inf:literal, $has_nan:literal, $has_neg_zero:literal,
-        $format:ident, $huge:expr, $nan:expr) => {
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $format:ident) => {
         const _: () = assert!($name::BITWIDTH <= <$bits>::BITS);
         const _: () = assert!($name::E >= 2);
         const _: () = assert!($name::M > 0 || !$name::HAS_INF);
         const _: () = assert!($name::MAX_EXP >= 1);
         const _: () = assert!($name::MIN_EXP <= 1);
 
+        // Intra-doc links cannot reach this crate from downstream expansions.
         #[doc = concat!("A minifloat with bit-layout S1E", $e, "M", $m,
-            " in the `", stringify!($format), "` format")]
+            " in the [`", stringify!($format),
+            "`](https://docs.rs/minifloat/latest/minifloat/enum.Format.html#variant.",
+            stringify!($format), ") format")]
         #[derive(Debug, Clone, Copy, Default)]
         $vis struct $name($bits);
 
@@ -502,14 +524,17 @@ macro_rules! __minifloat {
             /// Exponent bias
             pub const B: i32 = $b;
 
+            /// The encoding format of this type
+            pub const FORMAT: $crate::Format = $crate::Format::$format;
+
             /// Whether this format has infinities
-            pub const HAS_INF: bool = $has_inf;
+            pub const HAS_INF: bool = matches!(Self::FORMAT, $crate::Format::IEEE);
 
             /// Whether this format has a NaN encoding
-            pub const HAS_NAN: bool = $has_nan;
+            pub const HAS_NAN: bool = !matches!(Self::FORMAT, $crate::Format::Finite);
 
             /// Whether this format has a negative zero
-            pub const HAS_NEG_ZERO: bool = $has_neg_zero;
+            pub const HAS_NEG_ZERO: bool = !matches!(Self::FORMAT, $crate::Format::FNUZ);
 
             /// Total bitwidth
             pub const BITWIDTH: u32 = 1 + Self::E + Self::M;
@@ -583,7 +608,11 @@ macro_rules! __minifloat {
             /// This value would be +∞ if the type has infinities.  Otherwise, it is
             /// the maximum finite representation.  This value is also the result of
             /// a positive overflow.
-            pub const HUGE: Self = Self($huge);
+            pub const HUGE: Self = Self(match Self::FORMAT {
+                $crate::Format::IEEE => ((1 << Self::E) - 1) << Self::M,
+                $crate::Format::FN => Self::ABS_MASK - 1,
+                _ => Self::ABS_MASK, // Finite, FNUZ
+            });
 
             /// The maximum finite number
             pub const MAX: Self = Self(Self::HUGE.0 - Self::HAS_INF as $bits);
@@ -622,7 +651,12 @@ macro_rules! __minifloat {
             /// Bit pattern of the canonical NaN
             ///
             /// Meaningful only when [`HAS_NAN`][Self::HAS_NAN] is `true`.
-            const NAN_BITS: $bits = $nan;
+            const NAN_BITS: $bits = match Self::FORMAT {
+                $crate::Format::IEEE => ((1 << (Self::E + 1)) - 1) << (Self::M - 1),
+                $crate::Format::FN => Self::ABS_MASK,
+                $crate::Format::FNUZ => 1 << (Self::E + Self::M),
+                _ => 0, // Finite: meaningless, HAS_NAN is false
+            };
 
             #[doc = concat!("Raw transmutation from [`", stringify!($bits), "`]")]
             #[must_use]
@@ -1077,7 +1111,7 @@ macro_rules! __minifloat {
             const E: u32 = $e;
             const M: u32 = $m;
             const B: i32 = $b;
-            const HAS_NEG_ZERO: bool = $name::HAS_NEG_ZERO;
+            const FORMAT: $crate::Format = $name::FORMAT;
             const MAX_EXP: i32 = $name::MAX_EXP;
             const MAX_10_EXP: i32 = $name::MAX_10_EXP;
 
