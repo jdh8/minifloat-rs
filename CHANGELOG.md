@@ -28,9 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back.  A shape is timed only against a float that rounds the way it does
   &mdash; `f32` where 2<var>p</var> + 2 of its digits fit, `f64` otherwise, and
   no comparison at all for a shape reaching past `f64`.  That the `f32` route
-  really does round alike is now a test of its own, exhaustive over every pair
-  of every shape up to 8 bits and over all 2<sup>32</sup> pairs of `F16` and
-  `BF16`.
+  really does round alike is now checked in its own right, exhaustively over
+  every pair of every shape in the 8-bit test roster and over all
+  2<sup>32</sup> pairs of `F16` and `BF16`.
+- A second `cargo bench` target, `predicates`, timing `is_nan`, `classify`,
+  `partial_cmp` and `total_cmp`.  These have no alternative route to be
+  compared against; the target exists so an inlining sweep can be measured with
+  identical bench code on both sides.
+- `docs/`, three standing references that outlive the commits they came from:
+  `arithmetic.md` on why every operator rounds once on integer significands and
+  what the oracle actually covers, `inlining.md` on what a dependent crate gets
+  to inline and what rustc already does for free, and `benchmarking.md` on the
+  protocol behind every number in this project.  `README.md` links to them.
+- `CLAUDE.md`, a routing table into those documents plus the standing rules.
 
 ### Changed
 
@@ -53,33 +63,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Minifloat::Bits` is now sealed to `u8` and `u16`.  A minifloat is a sign bit
   plus fewer than 16 magnitude bits, so no wider storage was ever reachable.
 - **Binary `+`, `-`, `*`, `/` no longer evaluate in a hardware float.**  Each
-  operator works out the exact result on integer significands and rounds it
-  once, so no intermediate can lose what the format is able to hold.  An
+  operator works out the result on integer significands, exactly enough to round
+  it once, so no intermediate can lose what the format is able to hold.  An
   invalid operation (0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞) yields the format's
   NaN, or `MAX` where the format has none, instead of inheriting the host's
-  default NaN sign.  What that buys is now documented
-  too: correct rounding for every type with `HAS_EXACT_F64_CONVERSION`, and no
-  promise for a declared shape reaching past `f64`'s exponent range.
+  default NaN sign.  Correct rounding is now a promise for *every* shape the
+  macro accepts, including one whose exponent range overruns `f64`'s, which the
+  old route flushed to zero or to infinity on the way through.
 - Negation no longer decides with a comparison whether to flip the sign.  Only
   a format without a negative zero has to ask &mdash; the code a zero would flip
   into is its NaN &mdash; and the `setcc` answering it wrote a byte register,
-  inheriting a false dependency on whatever was last in it.  Under `sub`, which
-  is a negation followed by an addition, that was the previous sum, so a loop of
-  subtractions ran serialized: `FNUZ` subtraction cost 17 ns against 11 ns for
-  its own addition, and was the one operator a round trip through `f32` still
-  beat.  It now matches its addition, and wins.
-- Every operator, both conversions in each direction, and the rounding core
-  behind them are now `#[inline]`.  Nothing here is generic, so a crate that
-  depends on this one used to reach each of them through a call.  Marking only
-  the public operators is worse than marking none &mdash; the caller inlines
-  `add`, whose body still calls out to `from_parts` and `to_parts`, so one call
-  becomes two &mdash; and marking those two private helpers as well is the whole
-  difference: 0.99x against 1.13x.  With the conversions along, a downstream
-  crate measures what `lto = "fat"` would have bought it, which this crate
-  cannot ask for: Cargo reads a profile only from the workspace root and
+  inheriting a false dependency on whatever was last in it.  That cost `FNUZ`
+  subtraction 17 ns against 11 ns for its own addition, back when subtraction
+  was a negation followed by an addition; asking in arithmetic instead brought
+  it to 11.7 ns.  Subtraction no longer goes through negation at all (below),
+  so what remains here serves a caller writing `-x`.
+- **Every concrete method in the crate is now `#[inline]`** &mdash; the four
+  operators and their compound forms, `Neg`, the rounding core, both conversions
+  in each direction, the six kernels in `detail`, every predicate and comparison
+  the `minifloat!` macro generates, the `PartialEq` / `PartialOrd` / `Hash`
+  impls, the `Minifloat` forwarders, and `Format`'s own three predicates.
+  Nothing here is generic, so a crate that depends on this one used to reach
+  each of them through a call, and a dependency cannot ask for LTO on its
+  consumer's behalf: Cargo reads a profile only from the workspace root and
   silently ignores one in a dependency.
+
+  Marking part of the set is worse than marking none of it &mdash; the caller
+  inlines `add`, whose body still calls out to `from_parts` and `to_parts`, so
+  one call becomes two &mdash; which measured 0.99x against the 1.13x of the
+  completed operator set, and 1.10x with the conversions along.  Measured again
+  this round by counting instead of timing, on a probe crate with a path
+  dependency and 34 entry points: call instructions emitted downstream fall from
+  62 to 0 at `opt-level = 1` and from 4 to 0 at `opt-level = 3`, where marking
+  the kernels alone leaves 46 and the predicates alone 16.  From `-O2` up most
+  of this is redundant with rustc's own small-body heuristic and the MIR it
+  publishes for a `const fn` anyway &mdash; the downstream code is byte-identical
+  for the kernels &mdash; which is exactly why the policy is written down rather
+  than assumed.
 - `from_f32` widens to `f64` and `to_f32` casts down from `to_f64`, each still
   rounding exactly once.
+- **Subtraction no longer builds a negated operand.**  `Sub` was `self + -rhs`,
+  which made a format without a negative zero pay for the guard its negation
+  needs &mdash; the code a zero would flip into is its NaN &mdash; on every
+  subtraction.  `Add` and `Sub` now share one body that inverts the
+  subtrahend's sign where it is read rather than where it is stored, both
+  passing a literal flag that folds away.  On an idle box, min across 30
+  interleaved passes of alternating builds: `FNUZ` subtraction 0.773&ndash;0.781x,
+  addition 0.93&ndash;0.94x, an untouched `mul` control flat at
+  0.997&ndash;1.008x.  `FNUZ` subtraction against its own addition goes from
+  1.18x to 0.98x, and the crate's integer route now wins **all 56** of the
+  benchmark's comparisons against a round trip through a hardware float
+  (geomean 1.709x), where it used to lose three.
 
 ### Removed
 
