@@ -42,11 +42,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the NaN bit pattern from it.
 - `Minifloat` gains a required `FORMAT` constant, and its `HAS_NEG_ZERO`
   constant now defaults from `FORMAT`.
+- `Minifloat::Bits` is now sealed to `u8` and `u16`.  A minifloat is a sign bit
+  plus fewer than 16 magnitude bits, so no wider storage was ever reachable.
+- Binary `+`, `-`, `*`, `/` always evaluate in `f64` now.  An `f64` operand
+  pair carries more than twice the precision any minifloat result needs, so the
+  former `f32` shortcut could only ever agree with it.
+- `from_f32` widens to `f64` and `to_f32` casts down from `to_f64`, each still
+  rounding exactly once.
 
 ### Removed
 
 - The `NanStyle` enum and `Minifloat::N`, superseded by `Format` and
   `Minifloat::FORMAT`.
+- `Minifloat::S`, which was always `true`.  `BITWIDTH` is `1 + E + M`.
+- `Minifloat::USE_F32_ADD` and `Minifloat::USE_F32_MUL`, along with their
+  inherent twins.  They selected between two routes that were required to
+  agree, and the surviving one is no longer the slower.
 - The `example` module.
 - `F8E3M4FN`, `F8E4M3B11`, and `F8E4M3B11FN`, which are not in LLVM's set.
   They remain one `minifloat!` line away.
@@ -63,6 +74,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Finite` types no longer let a NaN input fall through to the rounding path,
   where an all-ones payload could carry out of the exponent field.  `from_f32`
   and `from_f64` saturate to ±`MAX` instead, preserving the sign.
+- Conversions no longer read the source exponent field and shift it into place.
+  That trick is valid only while the source number is normal *and* the target's
+  exponent range sits inside the source's, so it broke wherever a shape reached
+  past `f32` or `f64`:
+  - `from_f64` returned a nonzero code for `0.0`, and landed two binades off
+    for any subnormal `f64`, whenever the type's minimum exponent was below
+    `f64`'s.
+  - `from_f32` encoded every subnormal `f32` as the maximum value whenever
+    counting the target's subnormal ULPs overflowed `f64`.
+  - `to_f64` recomputed the *default* exponent bias instead of using the type's
+    own, so any type declared with a custom bias decoded wrongly.  Its
+    subnormal path flushed to zero one binade too early, and its normal path
+    overflowed a `u64` in debug builds.
+
+  Rounding now works on an exact integer significand, which is correct for
+  every shape the macro accepts.
 
 ## [0.2.0]
 
