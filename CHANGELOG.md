@@ -44,9 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constant now defaults from `FORMAT`.
 - `Minifloat::Bits` is now sealed to `u8` and `u16`.  A minifloat is a sign bit
   plus fewer than 16 magnitude bits, so no wider storage was ever reachable.
-- Binary `+`, `-`, `*`, `/` always evaluate in `f64` now.  An `f64` operand
-  pair carries more than twice the precision any minifloat result needs, so the
-  former `f32` shortcut could only ever agree with it.
+- **Binary `+`, `-`, `*`, `/` no longer evaluate in a hardware float.**  Each
+  operator works out the exact result on integer significands and rounds it
+  once, so no intermediate can lose what the format is able to hold.  An
+  invalid operation (0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞) yields the format's
+  NaN, or `MAX` where the format has none, instead of inheriting the host's
+  default NaN sign.  What that buys is now documented
+  too: correct rounding for every type with `HAS_EXACT_F64_CONVERSION`, and no
+  promise for a declared shape reaching past `f64`'s exponent range.
 - `from_f32` widens to `f64` and `to_f32` casts down from `to_f64`, each still
   rounding exactly once.
 
@@ -90,6 +95,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Rounding now works on an exact integer significand, which is correct for
   every shape the macro accepts.
+- Arithmetic had the same disease, one operation further along: a shape
+  reaching past `f64`'s exponent range flushed an operand or a result to zero
+  or to infinity on its way through, so `2`<sup>&minus;1000</sup> squared came
+  back as zero in a type that represents the answer exactly.  The operators are
+  now checked against an exact integer oracle sharing no arithmetic with them,
+  exhaustively for every shape up to 8 bits and sampled for the 16-bit ones.
 
 ## [0.2.0]
 
