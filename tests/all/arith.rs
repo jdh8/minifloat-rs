@@ -8,11 +8,12 @@
 
 use crate::encode::{cmp_scaled, code_value, reference_encode, reference_round};
 use crate::support::*;
-use minifloat::{minifloat, Minifloat, F8E4M3FN};
+use minifloat::{minifloat, Minifloat, BF16, F16, F8E4M3FN};
 
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::Hash;
+use core::num::NonZeroUsize;
 
 #[test]
 fn test_arithmetic_matches_f64() {
@@ -52,6 +53,98 @@ fn test_arithmetic_matches_f64() {
         }
     }
     test_most_8_bits(CheckArith);
+}
+
+/// Check all four operators against a round trip through [`f32`] on one pair
+///
+/// Widening both operands, letting the FPU work, and rounding the result back
+/// is the alternative `benches/arith.rs` measures against.  It has to land on
+/// the same value, or the benchmark would be timing two different answers.
+fn check_f32_pair<T: Minifloat + Debug>(x: T, y: T) {
+    let (xf, yf) = (x.to_f32(), y.to_f32());
+
+    for (op, actual, exact) in [
+        ('+', x + y, xf + yf),
+        ('-', x - y, xf - yf),
+        ('*', x * y, xf * yf),
+        ('/', x / y, xf / yf),
+    ] {
+        let expected = T::from_f32(exact);
+        // A format without a NaN saturates one to ±`MAX`.  Which sign it lands
+        // on is the host's default NaN talking, not a rule, so only the
+        // magnitude binds.
+        let (actual, expected) = if exact.is_nan() && T::NAN.is_none() {
+            (actual.abs(), expected.abs())
+        } else {
+            (actual, expected)
+        };
+        assert!(
+            same_mini(actual, expected),
+            "{x:?} {op} {y:?}: got {actual:?}, expected {expected:?}"
+        );
+    }
+}
+
+/// Every shape up to 8 bits clears the bar for the `f32` route
+///
+/// Exact operands, and 2<var>p</var> + 2 digits left to round in: no shape
+/// this narrow can fail either, so the sweep needs no filter.
+#[test]
+fn test_arithmetic_matches_f32() {
+    struct CheckArith32;
+    impl Check for CheckArith32 {
+        fn check<T: Minifloat + Debug + Hash>() -> bool
+        where
+            T::Bits: TryFrom<Mask>,
+        {
+            for_all::<T>(|x| {
+                for_all::<T>(|y| {
+                    check_f32_pair(x, y);
+                    true
+                })
+            })
+        }
+    }
+    test_most_8_bits(CheckArith32);
+}
+
+/// Run [`check_f32_pair`] on every ordered pair of bit patterns
+///
+/// A 16-bit shape has 2<sup>32</sup> of them, so the left operand is striped
+/// across the machine's cores.  Every stripe walks the whole right operand, so
+/// the sweep stays exhaustive however many cores show up.
+fn sweep_f32_pairs<T: Minifloat + Debug>()
+where
+    T::Bits: TryFrom<Mask>,
+{
+    let stride = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    let mask = bit_mask(T::BITWIDTH);
+
+    std::thread::scope(|scope| {
+        for offset in 0..stride as Mask {
+            scope.spawn(move || {
+                for x in (offset..=mask).step_by(stride) {
+                    let x = T::from_bits(narrow::<T>(x));
+
+                    for y in 0..=mask {
+                        check_f32_pair(x, T::from_bits(narrow::<T>(y)));
+                    }
+                }
+            });
+        }
+    });
+}
+
+/// `F16` and `BF16` are the only 16-bit shapes the `f32` route can serve
+///
+/// `E11M4` and `E12M3` are not exactly representable in `f32` to begin with,
+/// and `E2M13` is, yet a product of two of its significands is 28 digits wide
+/// &mdash; too many to round through 24.  `benches/arith.rs` sends those
+/// through `f64`, or skips them.
+#[test]
+fn test_arithmetic_matches_f32_16bit() {
+    sweep_f32_pairs::<F16>();
+    sweep_f32_pairs::<BF16>();
 }
 
 #[test]

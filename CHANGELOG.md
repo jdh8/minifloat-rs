@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type, and `Minifloat::FORMAT` for generic code.  `Format::has_inf`,
   `Format::has_nan`, and `Format::has_neg_zero` answer what a format is without
   naming a type.
+- A `cargo bench` target timing each operator against the route it replaced:
+  widen both operands to a hardware float, let the FPU work, round the result
+  back.  A shape is timed only against a float that rounds the way it does
+  &mdash; `f32` where 2<var>p</var> + 2 of its digits fit, `f64` otherwise, and
+  no comparison at all for a shape reaching past `f64`.  That the `f32` route
+  really does round alike is now a test of its own, exhaustive over every pair
+  of every shape up to 8 bits and over all 2<sup>32</sup> pairs of `F16` and
+  `BF16`.
 
 ### Changed
 

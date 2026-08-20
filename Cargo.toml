@@ -8,3 +8,14 @@ repository = "https://github.com/jdh8/minifloat-rs"
 license = "MPL-2.0"
 categories = ["mathematics", "data-structures"]
 keywords = ["minifloat", "f16", "bfloat16"]
+
+[dev-dependencies]
+criterion = "0.8"
+
+[lib]
+# Keeps `cargo bench` from running the lib test harness as a benchmark target.
+bench = false
+
+[[bench]]
+name = "arith"
+harness = false
