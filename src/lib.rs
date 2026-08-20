@@ -102,8 +102,8 @@ impl Format {
 /// 2. [`FNUZ`](Format::FNUZ) types do not have a negative zero.
 ///
 /// Binary arithmetic (`+`, `-`, `*`, `/`) is correctly rounded for every shape:
-/// each operator works out the exact result on integer significands and rounds
-/// it once, ties to even.  No hardware float is involved, so a type whose
+/// each operator works out the result on integer significands, exactly enough
+/// to round it once, ties to even.  No hardware float is involved, so a type whose
 /// exponent range overruns [`f64`]'s is served as exactly as any other.  An
 /// invalid operation — 0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞ — yields the format's
 /// NaN, or [`MAX`][Self::MAX] where the format has none.

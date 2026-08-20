@@ -111,9 +111,9 @@ yourself still means all-ones-is-NaN, and still has a maximum of 4.
 
 Binary `+`, `-`, `*`, `/` and their compound forms are implemented for every
 generated type, and every one of them is correctly rounded.  Each operator
-works out the exact result on integer significands &mdash; a product, a signed
-sum, or a quotient with a sticky remainder &mdash; and rounds it once, ties to
-even.  No `f32` or `f64` sits in the middle, so a shape whose exponent range
+works out the result on integer significands &mdash; a product, a signed sum, or
+a quotient with a sticky remainder &mdash; exactly enough to round it once, ties
+to even.  No `f32` or `f64` sits in the middle, so a shape whose exponent range
 overruns `f64`'s rounds as exactly as any other.
 
 An invalid operation &mdash; 0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞ &mdash; yields
@@ -134,6 +134,17 @@ All generated types implement [`Hash`](core::hash::Hash) with `+0` and
 `&minus;0` normalized to the same hash (matching their `PartialEq`).  Like
 `f32` / `f64`, minifloats do not implement `Eq` because `NaN != NaN`, so
 direct use as `HashMap` keys requires a wrapper.
+
+## Design notes
+
+The decisions behind the arithmetic, and the measurements that justify them, are
+recorded in the repository rather than here:
+[`docs/arithmetic.md`](https://github.com/jdh8/minifloat-rs/blob/main/docs/arithmetic.md)
+for why every operator rounds once on integer significands,
+[`docs/inlining.md`](https://github.com/jdh8/minifloat-rs/blob/main/docs/inlining.md)
+for what a dependent crate gets to inline, and
+[`docs/benchmarking.md`](https://github.com/jdh8/minifloat-rs/blob/main/docs/benchmarking.md)
+for how any number in this project was arrived at.
 
 ## License
 
