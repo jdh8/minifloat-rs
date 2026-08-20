@@ -1007,8 +1007,19 @@ macro_rules! __minifloat {
             type Output = Self;
 
             fn neg(self) -> Self::Output {
-                let flag = !Self::HAS_NEG_ZERO && self.0 & Self::ABS_MASK == 0;
-                let switch = <$bits>::from(!flag) << (Self::E + Self::M);
+                let sign = 1 << (Self::E + Self::M);
+                let magnitude = self.0 & Self::ABS_MASK;
+                // Without a negative zero, a zero has no sign to flip: the
+                // code it would flip into is the NaN.  The top bit of
+                // `m | -m` says whether the magnitude is nonzero; `m == 0`
+                // asks the same in a `setcc`, whose partial write of a byte
+                // register carries a false dependency on the last value
+                // there -- the previous sum, in a loop of subtractions.
+                let switch = if Self::HAS_NEG_ZERO {
+                    sign
+                } else {
+                    (magnitude | magnitude.wrapping_neg()) & sign
+                };
                 Self(self.0 ^ switch)
             }
         }

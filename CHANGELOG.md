@@ -60,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default NaN sign.  What that buys is now documented
   too: correct rounding for every type with `HAS_EXACT_F64_CONVERSION`, and no
   promise for a declared shape reaching past `f64`'s exponent range.
+- Negation no longer decides with a comparison whether to flip the sign.  Only
+  a format without a negative zero has to ask &mdash; the code a zero would flip
+  into is its NaN &mdash; and the `setcc` answering it wrote a byte register,
+  inheriting a false dependency on whatever was last in it.  Under `sub`, which
+  is a negation followed by an addition, that was the previous sum, so a loop of
+  subtractions ran serialized: `FNUZ` subtraction cost 17 ns against 11 ns for
+  its own addition, and was the one operator a round trip through `f32` still
+  beat.  It now matches its addition, and wins.
 - `from_f32` widens to `f64` and `to_f32` casts down from `to_f64`, each still
   rounding exactly once.
 
