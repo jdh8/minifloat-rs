@@ -929,6 +929,42 @@ macro_rules! __minifloat {
                 }
             }
 
+            /// `self` + `rhs`, or `self` &minus; `rhs` when `flip` is set
+            ///
+            /// Subtraction is addition with the subtrahend's sign flipped.
+            /// Flipping it here, in the one place that reads a sign, is what
+            /// spares a format without a negative zero the guard its `Neg`
+            /// needs: there is no intermediate value to keep representable,
+            /// only a bool to invert.  Both callers pass a literal, so the
+            /// flag folds away before anything is emitted.
+            #[inline]
+            fn add_impl(self, rhs: Self, flip: bool) -> Self {
+                if self.is_nan() || rhs.is_nan() {
+                    return Self::INVALID;
+                }
+                if self.is_infinite() && rhs.is_infinite() {
+                    // Two infinities agree only when their signs do; what the
+                    // other case ought to be is exactly the question.
+                    let agree = self.is_sign_negative() == (rhs.is_sign_negative() ^ flip);
+                    return if agree { self } else { Self::INVALID };
+                }
+                // An infinity outweighs anything finite added to it.
+                if self.is_infinite() {
+                    return self;
+                }
+                if rhs.is_infinite() {
+                    // Reachable only where the format has infinities, and
+                    // there a negation is the bare XOR it looks like.
+                    return if flip { -rhs } else { rhs };
+                }
+                let (negative, significand, exponent) = self.to_parts();
+                let (rhs_negative, rhs_significand, rhs_exponent) = rhs.to_parts();
+                let (negative, significand, exponent) = $crate::detail::add_parts(
+                    negative, significand, exponent,
+                    rhs_negative ^ flip, rhs_significand, rhs_exponent);
+                Self::from_parts(negative, significand, exponent)
+            }
+
             /// The result of an invalid operation
             ///
             /// A format without a NaN saturates one to `MAX`, as
@@ -1039,8 +1075,10 @@ macro_rules! __minifloat {
                 // code it would flip into is the NaN.  The top bit of
                 // `m | -m` says whether the magnitude is nonzero; `m == 0`
                 // asks the same in a `setcc`, whose partial write of a byte
-                // register carries a false dependency on the last value
-                // there -- the previous sum, in a loop of subtractions.
+                // register carries a false dependency on whatever was last
+                // in it.  The caller that made that stall visible was `sub`,
+                // which no longer comes through here -- it inverts a sign
+                // flag instead.  This stays as the cheaper way to ask.
                 let switch = if Self::HAS_NEG_ZERO {
                     sign
                 } else {
@@ -1054,25 +1092,7 @@ macro_rules! __minifloat {
             type Output = Self;
             #[inline]
             fn add(self, rhs: Self) -> Self {
-                if self.is_nan() || rhs.is_nan() {
-                    return Self::INVALID;
-                }
-                if self.is_infinite() && rhs.is_infinite() {
-                    // Two infinities agree only when their signs do; what the
-                    // other case ought to be is exactly the question.
-                    let agree = self.is_sign_negative() == rhs.is_sign_negative();
-                    return if agree { self } else { Self::INVALID };
-                }
-                if self.is_infinite() || rhs.is_infinite() {
-                    // An infinity outweighs anything finite added to it.
-                    return if self.is_infinite() { self } else { rhs };
-                }
-                let (negative, significand, exponent) = self.to_parts();
-                let (rhs_negative, rhs_significand, rhs_exponent) = rhs.to_parts();
-                let (negative, significand, exponent) = $crate::detail::add_parts(
-                    negative, significand, exponent,
-                    rhs_negative, rhs_significand, rhs_exponent);
-                Self::from_parts(negative, significand, exponent)
+                self.add_impl(rhs, false)
             }
         }
 
@@ -1080,7 +1100,7 @@ macro_rules! __minifloat {
             type Output = Self;
             #[inline]
             fn sub(self, rhs: Self) -> Self {
-                self + -rhs
+                self.add_impl(rhs, true)
             }
         }
 
