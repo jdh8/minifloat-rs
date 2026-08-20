@@ -667,16 +667,12 @@ macro_rules! __minifloat {
             #[must_use]
             #[allow(clippy::bad_bit_mask)]
             pub const fn is_nan(self) -> bool {
-                if !Self::HAS_NAN {
-                    return false;
+                match Self::FORMAT {
+                    $crate::Format::IEEE => self.0 & Self::ABS_MASK > Self::HUGE.0,
+                    $crate::Format::FN => self.0 & Self::ABS_MASK == Self::NAN_BITS,
+                    $crate::Format::FNUZ => self.0 == Self::NAN_BITS,
+                    _ => false, // Finite: there is no NaN
                 }
-                if Self::HAS_INF {
-                    return self.0 & Self::ABS_MASK > Self::HUGE.0;
-                }
-                if !Self::HAS_NEG_ZERO {
-                    return self.0 == Self::NAN_BITS;
-                }
-                self.0 & Self::ABS_MASK == Self::NAN_BITS
             }
 
             /// Check if the value is positive or negative infinity
