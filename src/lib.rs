@@ -456,16 +456,10 @@ macro_rules! minifloat {
             pub const NEG_INFINITY: Self = Self(Self::HUGE.0 | 1 << (Self::E + Self::M));
         }
     };
-    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, FN) => {
-        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, FN);
-
-        impl $name {
-            /// One representation of NaN
-            pub const NAN: Self = Self(Self::NAN_BITS);
-        }
-    };
-    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, FNUZ) => {
-        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, FNUZ);
+    // `FN` and `FNUZ`: a NaN encoding, no infinities.  They differ only in the
+    // ident they forward, so one arm covers both.
+    ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $format:ident) => {
+        $crate::__minifloat!($vis struct $name($bits): $e, $m, $b, $format);
 
         impl $name {
             /// One representation of NaN
