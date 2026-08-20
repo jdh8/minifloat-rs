@@ -653,12 +653,14 @@ macro_rules! __minifloat {
 
             #[doc = concat!("Raw transmutation from [`", stringify!($bits), "`]")]
             #[must_use]
+            #[inline]
             pub const fn from_bits(v: $bits) -> Self {
                 Self(<$bits>::MAX >> (<$bits>::BITS - Self::BITWIDTH) & v)
             }
 
             #[doc = concat!("Raw transmutation to [`", stringify!($bits), "`]")]
             #[must_use]
+            #[inline]
             pub const fn to_bits(self) -> $bits {
                 self.0
             }
@@ -666,6 +668,7 @@ macro_rules! __minifloat {
             /// Check if the value is NaN
             #[must_use]
             #[allow(clippy::bad_bit_mask)]
+            #[inline]
             pub const fn is_nan(self) -> bool {
                 match Self::FORMAT {
                     $crate::Format::IEEE => self.0 & Self::ABS_MASK > Self::HUGE.0,
@@ -677,12 +680,14 @@ macro_rules! __minifloat {
 
             /// Check if the value is positive or negative infinity
             #[must_use]
+            #[inline]
             pub const fn is_infinite(self) -> bool {
                 Self::HAS_INF && self.0 & Self::ABS_MASK == Self::HUGE.0
             }
 
             /// Check if the value is finite, i.e. neither infinite nor NaN
             #[must_use]
+            #[inline]
             pub const fn is_finite(self) -> bool {
                 !self.is_nan() && !self.is_infinite()
             }
@@ -691,6 +696,7 @@ macro_rules! __minifloat {
             ///
             /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
             #[must_use]
+            #[inline]
             pub const fn is_subnormal(self) -> bool {
                 matches!(self.classify(), core::num::FpCategory::Subnormal)
             }
@@ -699,6 +705,7 @@ macro_rules! __minifloat {
             ///
             /// [subnormal]: https://en.wikipedia.org/wiki/Subnormal_number
             #[must_use]
+            #[inline]
             pub const fn is_normal(self) -> bool {
                 matches!(self.classify(), core::num::FpCategory::Normal)
             }
@@ -708,6 +715,7 @@ macro_rules! __minifloat {
             /// If only one property is going to be tested, it is generally faster to
             /// use the specific predicate instead.
             #[must_use]
+            #[inline]
             pub const fn classify(self) -> core::num::FpCategory {
                 if self.is_nan() {
                     core::num::FpCategory::Nan
@@ -727,6 +735,7 @@ macro_rules! __minifloat {
 
             /// Compute the absolute value
             #[must_use]
+            #[inline]
             pub const fn abs(self) -> Self {
                 // Without a negative zero, NaN *is* the sign bit; masking it
                 // off would turn it into a zero.
@@ -738,12 +747,14 @@ macro_rules! __minifloat {
 
             /// Check if the sign bit is clear
             #[must_use]
+            #[inline]
             pub const fn is_sign_positive(self) -> bool {
                 self.0 >> (Self::E + Self::M) & 1 == 0
             }
 
             /// Check if the sign bit is set
             #[must_use]
+            #[inline]
             pub const fn is_sign_negative(self) -> bool {
                 self.0 >> (Self::E + Self::M) & 1 == 1
             }
@@ -759,6 +770,7 @@ macro_rules! __minifloat {
             /// identifies NaN.
             #[must_use]
             #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_lossless)]
+            #[inline]
             pub const fn integer_decode(self) -> (u64, i16, i8) {
                 if self.is_nan() {
                     return (0, 0, 0);
@@ -780,6 +792,7 @@ macro_rules! __minifloat {
             /// Map sign-magnitude notations to plain unsigned integers
             ///
             /// This serves as a hook for the [`Minifloat`] trait.
+            #[inline]
             const fn total_cmp_key(x: $bits) -> $bits {
                 let sign = 1 << (Self::E + Self::M);
                 let mask = ((x & sign) >> (Self::E + Self::M)) * (sign - 1);
@@ -791,6 +804,7 @@ macro_rules! __minifloat {
             /// `==` cannot be used in `const` contexts on stable Rust until
             /// `const_trait` is stabilized.  This method covers that gap.
             #[must_use]
+            #[inline]
             pub const fn const_eq(self, other: Self) -> bool {
                 let eq = self.0 == other.0 && !self.is_nan();
                 eq || Self::HAS_NEG_ZERO && (self.0 | other.0) & Self::ABS_MASK == 0
@@ -801,6 +815,7 @@ macro_rules! __minifloat {
             ///
             /// Returns `None` if either operand is NaN.
             #[must_use]
+            #[inline]
             pub const fn const_partial_cmp(self, other: Self) -> Option<core::cmp::Ordering> {
                 if self.is_nan() || other.is_nan() {
                     return None;
@@ -922,6 +937,7 @@ macro_rules! __minifloat {
             const INVALID: Self = Self(if Self::HAS_NAN { Self::NAN_BITS } else { Self::MAX.0 });
 
             /// [`HUGE`][Self::HUGE] with the sign an operation worked out
+            #[inline]
             const fn huge(negative: bool) -> Self {
                 Self(Self::HUGE.0 | ((negative as $bits) << (Self::E + Self::M)))
             }
@@ -984,6 +1000,7 @@ macro_rules! __minifloat {
         }
 
         impl PartialEq for $name {
+            #[inline]
             fn eq(&self, other: &Self) -> bool {
                 self.const_eq(*other)
             }
@@ -993,6 +1010,7 @@ macro_rules! __minifloat {
             /// Hash a minifloat by its bit pattern, normalizing zero so `+0` and
             /// `-0` hash to the same value where the format has both.  NaN
             /// values hash by their raw bits, consistent with `NaN != NaN`.
+            #[inline]
             fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
                 let bits = if !self.is_nan() && self.0 & Self::ABS_MASK == 0 {
                     <$bits>::default()
@@ -1004,6 +1022,7 @@ macro_rules! __minifloat {
         }
 
         impl PartialOrd for $name {
+            #[inline]
             fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
                 self.const_partial_cmp(*other)
             }
@@ -1158,46 +1177,57 @@ macro_rules! __minifloat {
             const EPSILON: Self = Self::EPSILON;
             const MIN: Self = Self::MIN;
 
+            #[inline]
             fn from_bits(v: Self::Bits) -> Self {
                 Self::from_bits(v)
             }
 
+            #[inline]
             fn to_bits(self) -> Self::Bits {
                 self.to_bits()
             }
 
+            #[inline]
             fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
                 Self::total_cmp_key(self.0).cmp(&Self::total_cmp_key(other.0))
             }
 
+            #[inline]
             fn is_nan(self) -> bool {
                 self.is_nan()
             }
 
+            #[inline]
             fn is_infinite(self) -> bool {
                 self.is_infinite()
             }
 
+            #[inline]
             fn is_finite(self) -> bool {
                 self.is_finite()
             }
 
+            #[inline]
             fn classify(self) -> core::num::FpCategory {
                 self.classify()
             }
 
+            #[inline]
             fn abs(self) -> Self {
                 self.abs()
             }
 
+            #[inline]
             fn is_sign_positive(self) -> bool {
                 self.is_sign_positive()
             }
 
+            #[inline]
             fn is_sign_negative(self) -> bool {
                 self.is_sign_negative()
             }
 
+            #[inline]
             fn integer_decode(self) -> (u64, i16, i8) {
                 self.integer_decode()
             }
