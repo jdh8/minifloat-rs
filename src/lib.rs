@@ -68,6 +68,7 @@ impl Format {
     /// This is `true` only for [`IEEE`](Self::IEEE), which reserves the
     /// maximum exponent for them.
     #[must_use]
+    #[inline]
     pub const fn has_inf(self) -> bool {
         matches!(self, Self::IEEE)
     }
@@ -77,6 +78,7 @@ impl Format {
     /// This is `false` only for [`Finite`](Self::Finite), where every bit
     /// pattern is a number.
     #[must_use]
+    #[inline]
     pub const fn has_nan(self) -> bool {
         !matches!(self, Self::Finite)
     }
@@ -86,6 +88,7 @@ impl Format {
     /// This is `false` only for [`FNUZ`](Self::FNUZ), which spends the
     /// would-be &minus;0.0 encoding on NaN.
     #[must_use]
+    #[inline]
     pub const fn has_neg_zero(self) -> bool {
         !matches!(self, Self::FNUZ)
     }
