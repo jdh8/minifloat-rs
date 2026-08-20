@@ -110,10 +110,9 @@ yourself still means all-ones-is-NaN, and still has a maximum of 4.
 ## Arithmetic
 
 Binary `+`, `-`, `*`, `/` and their compound forms are implemented for every
-generated type.  Addition/subtraction/multiplication route through `f32` when
-the type's precision and exponent range allow it (`USE_F32_ADD`,
-`USE_F32_MUL` are exposed as `pub const` items), falling back to `f64`
-otherwise.  Division always routes through `f64`.
+generated type.  Each is evaluated in `f64` and rounded back once: a minifloat
+has at most 14 significand bits, so an `f64` operand pair carries more than
+twice the precision the result needs.
 
 ```rust
 use minifloat::F16;

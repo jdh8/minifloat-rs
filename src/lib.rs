@@ -102,9 +102,9 @@ impl Format {
 /// 1. [`FN`](Format::FN) and [`FNUZ`](Format::FNUZ) types do not have infinities.
 /// 2. [`FNUZ`](Format::FNUZ) types do not have a negative zero.
 ///
-/// Binary arithmetic (`+`, `-`, `*`, `/`) routes through [`f32`] when the
-/// type's precision and exponent range allow it, falling back to [`f64`]
-/// otherwise.  Division always routes through [`f64`].
+/// Binary arithmetic (`+`, `-`, `*`, `/`) is evaluated in [`f64`] and rounded
+/// back once.  A minifloat has at most 14 significand bits, so an [`f64`]
+/// operand pair carries more than twice the precision the result needs.
 ///
 /// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
 pub trait Minifloat:
@@ -199,24 +199,6 @@ pub trait Minifloat:
     const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
         && f64::MAX_EXP >= Self::MAX_EXP
         && f64::MIN_EXP <= Self::MIN_EXP;
-
-    /// Whether `x + y` and `x - y` may safely route through [`f32`]
-    ///
-    /// Addition or subtraction in `f32` is bit-exact equivalent to performing
-    /// it in this type when the `f32` mantissa has at least twice this type's
-    /// precision and its exponent range strictly exceeds this type's.
-    const USE_F32_ADD: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
-        && f32::MAX_EXP > Self::MAX_EXP
-        && f32::MIN_EXP < Self::MIN_EXP;
-
-    /// Whether `x * y` may safely route through [`f32`]
-    ///
-    /// Multiplication doubles the exponent and the mantissa width, so this
-    /// requires `f32`'s mantissa to have at least twice the precision of this
-    /// type and its exponent range to cover at least double this type's.
-    const USE_F32_MUL: bool = f32::MANTISSA_DIGITS >= 2 * Self::MANTISSA_DIGITS
-        && f32::MAX_EXP >= 2 * Self::MAX_EXP
-        && f32::MIN_EXP - 1 <= 2 * (Self::MIN_EXP - 1);
 
     /// One representation of NaN, or `None` for formats without one
     ///
@@ -613,12 +595,6 @@ macro_rules! __minifloat {
             pub const HAS_EXACT_F64_CONVERSION: bool =
                 <Self as $crate::Minifloat>::HAS_EXACT_F64_CONVERSION;
 
-            /// Whether `x + y` and `x - y` may safely route through [`f32`]
-            pub const USE_F32_ADD: bool = <Self as $crate::Minifloat>::USE_F32_ADD;
-
-            /// Whether `x * y` may safely route through [`f32`]
-            pub const USE_F32_MUL: bool = <Self as $crate::Minifloat>::USE_F32_MUL;
-
             /// The largest number of this type
             ///
             /// This value would be +∞ if the type has infinities.  Otherwise, it is
@@ -994,33 +970,21 @@ macro_rules! __minifloat {
         impl core::ops::Add for $name {
             type Output = Self;
             fn add(self, rhs: Self) -> Self {
-                if Self::USE_F32_ADD {
-                    Self::from_f32(self.to_f32() + rhs.to_f32())
-                } else {
-                    Self::from_f64(self.to_f64() + rhs.to_f64())
-                }
+                Self::from_f64(self.to_f64() + rhs.to_f64())
             }
         }
 
         impl core::ops::Sub for $name {
             type Output = Self;
             fn sub(self, rhs: Self) -> Self {
-                if Self::USE_F32_ADD {
-                    Self::from_f32(self.to_f32() - rhs.to_f32())
-                } else {
-                    Self::from_f64(self.to_f64() - rhs.to_f64())
-                }
+                Self::from_f64(self.to_f64() - rhs.to_f64())
             }
         }
 
         impl core::ops::Mul for $name {
             type Output = Self;
             fn mul(self, rhs: Self) -> Self {
-                if Self::USE_F32_MUL {
-                    Self::from_f32(self.to_f32() * rhs.to_f32())
-                } else {
-                    Self::from_f64(self.to_f64() * rhs.to_f64())
-                }
+                Self::from_f64(self.to_f64() * rhs.to_f64())
             }
         }
 
