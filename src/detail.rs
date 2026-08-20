@@ -96,3 +96,90 @@ pub const LOG2_SIGNIFICAND: [f64; 16] = [
     -8.805_780_458_002_638_34e-5,
     -4.402_823_044_177_721_15e-5,
 ];
+
+/// Widest exponent gap an aligned sum spans
+///
+/// An addend further below the other than this cannot move it at all: the
+/// other is a representable value, and anything under half its ULP rounds
+/// straight back to it.  Dropping such an addend is also what keeps the
+/// aligned sum inside an [`i64`], two 15-bit significands and this shift being
+/// 62 bits at worst.
+const ALIGN_CAP: i32 = 46;
+
+/// One addend at the common exponent, signed
+///
+/// An addend below that exponent is one [`ALIGN_CAP`] has already ruled out.
+#[allow(clippy::cast_possible_wrap)]
+const fn align(negative: bool, significand: u64, exponent: i32, base: i32) -> i64 {
+    let magnitude = if exponent >= base {
+        (significand << (exponent - base)) as i64
+    } else {
+        0
+    };
+    if negative {
+        -magnitude
+    } else {
+        magnitude
+    }
+}
+
+/// Sum of two signed magnitudes, exact enough to round
+///
+/// Each operand is `sign` &times; `significand` &times;
+/// 2<sup>`exponent`</sup>, and so is the result.  The caller is responsible
+/// for the significands fitting in 15 bits, which every minifloat does.
+#[must_use]
+pub const fn add_parts(
+    negative: bool,
+    significand: u64,
+    exponent: i32,
+    rhs_negative: bool,
+    rhs_significand: u64,
+    rhs_exponent: i32,
+) -> (bool, u64, i32) {
+    let top = if exponent > rhs_exponent { exponent } else { rhs_exponent };
+    let bottom = if exponent < rhs_exponent { exponent } else { rhs_exponent };
+    let base = if top - bottom > ALIGN_CAP { top - ALIGN_CAP } else { bottom };
+
+    let sum = align(negative, significand, exponent, base)
+        + align(rhs_negative, rhs_significand, rhs_exponent, base);
+
+    (
+        // Cancellation yields +0 unless both addends were negative.
+        if sum == 0 { negative && rhs_negative } else { sum < 0 },
+        sum.unsigned_abs(),
+        base,
+    )
+}
+
+/// Quotient bits computed below the dividend's own
+///
+/// A minifloat keeps at most 15 of them; the rest are the guard and sticky
+/// room every rounding needs.
+const QUOTIENT_BITS: u32 = 46;
+
+/// Quotient of two magnitudes, exact enough to round
+///
+/// The remainder collapses into the lowest bit of the quotient, the sticky bit
+/// every divider keeps.  At these many quotient bits it never decides a
+/// rounding on its own &mdash; two fractions this short cannot straddle a
+/// midpoint that finely &mdash; but it is what leaves the bit count a matter
+/// of headroom instead of proof.  The caller is responsible for a nonzero
+/// divisor and for both significands fitting in 15 bits.
+#[must_use]
+#[allow(clippy::cast_possible_wrap)]
+pub const fn div_parts(
+    significand: u64,
+    exponent: i32,
+    rhs_significand: u64,
+    rhs_exponent: i32,
+) -> (u64, i32) {
+    let numerator = significand << QUOTIENT_BITS;
+    let quotient = numerator / rhs_significand;
+    let remainder = numerator % rhs_significand;
+
+    (
+        quotient | (remainder != 0) as u64,
+        exponent - rhs_exponent - QUOTIENT_BITS as i32,
+    )
+}

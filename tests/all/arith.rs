@@ -25,10 +25,27 @@ fn test_arithmetic_matches_f64() {
                 for_all::<T>(|y| {
                     let xf = x.to_f64();
                     let yf = y.to_f64();
-                    same_mini(x + y, T::from_f64(xf + yf))
-                        && same_mini(x - y, T::from_f64(xf - yf))
-                        && same_mini(x * y, T::from_f64(xf * yf))
-                        && same_mini(x / y, T::from_f64(xf / yf))
+                    for (op, actual, exact) in [
+                        ('+', x + y, xf + yf),
+                        ('-', x - y, xf - yf),
+                        ('*', x * y, xf * yf),
+                        ('/', x / y, xf / yf),
+                    ] {
+                        let expected = T::from_f64(exact);
+                        // A format without a NaN saturates one to ±`MAX`.
+                        // Which sign it lands on is the host's default NaN
+                        // talking, not a rule, so only the magnitude binds.
+                        let (actual, expected) = if exact.is_nan() && T::NAN.is_none() {
+                            (actual.abs(), expected.abs())
+                        } else {
+                            (actual, expected)
+                        };
+                        assert!(
+                            same_mini(actual, expected),
+                            "{x:?} {op} {y:?}: got {actual:?}, expected {expected:?}"
+                        );
+                    }
+                    true
                 })
             })
         }
@@ -57,6 +74,11 @@ fn test_arithmetic_16bit_sampled() {
         where
             T::Bits: TryFrom<Mask>,
         {
+            // `f64` cannot referee a shape it cannot even hold; the exact
+            // oracle in `test_arithmetic_correctly_rounded_16bit` does.
+            if !T::HAS_EXACT_F64_CONVERSION {
+                return true;
+            }
             let mut lcg = Lcg::new(0x0FED_CBA9_8765_4321);
             let draw = |lcg: &mut Lcg| T::from_bits(narrow::<T>(Mask::from(lcg.next()) & bit_mask(T::BITWIDTH)));
 
@@ -64,12 +86,6 @@ fn test_arithmetic_16bit_sampled() {
                 let x = draw(&mut lcg);
                 let y = draw(&mut lcg);
                 let (xf, yf) = (x.to_f64(), y.to_f64());
-
-                // Operands whose `f64` image does not come back unchanged are
-                // outside `f64`'s range, where it cannot referee the result.
-                if !same_mini(T::from_f64(xf), x) || !same_mini(T::from_f64(yf), y) {
-                    continue;
-                }
 
                 for (op, result) in [
                     ('+', (x + y, xf + yf)),

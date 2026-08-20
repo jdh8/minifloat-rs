@@ -110,9 +110,16 @@ yourself still means all-ones-is-NaN, and still has a maximum of 4.
 ## Arithmetic
 
 Binary `+`, `-`, `*`, `/` and their compound forms are implemented for every
-generated type.  Each is evaluated in `f64` and rounded back once: a minifloat
-has at most 14 significand bits, so an `f64` operand pair carries more than
-twice the precision the result needs.
+generated type, and every one of them is correctly rounded.  Each operator
+works out the exact result on integer significands &mdash; a product, a signed
+sum, or a quotient with a sticky remainder &mdash; and rounds it once, ties to
+even.  No `f32` or `f64` sits in the middle, so a shape whose exponent range
+overruns `f64`'s rounds as exactly as any other.
+
+An invalid operation &mdash; 0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞ &mdash; yields
+the format's NaN, or `MAX` where the format has none, the same saturation
+`from_f64` applies to a NaN input.  Dividing a nonzero value by zero yields
+±`HUGE`, and so does any overflow.
 
 ```rust
 use minifloat::F16;

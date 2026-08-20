@@ -98,9 +98,12 @@ impl Format {
 /// 1. [`FN`](Format::FN) and [`FNUZ`](Format::FNUZ) types do not have infinities.
 /// 2. [`FNUZ`](Format::FNUZ) types do not have a negative zero.
 ///
-/// Binary arithmetic (`+`, `-`, `*`, `/`) is evaluated in [`f64`] and rounded
-/// back once.  A minifloat has at most 14 significand bits, so an [`f64`]
-/// operand pair carries more than twice the precision the result needs.
+/// Binary arithmetic (`+`, `-`, `*`, `/`) is correctly rounded for every shape:
+/// each operator works out the exact result on integer significands and rounds
+/// it once, ties to even.  No hardware float is involved, so a type whose
+/// exponent range overruns [`f64`]'s is served as exactly as any other.  An
+/// invalid operation — 0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞ — yields the format's
+/// NaN, or [`MAX`][Self::MAX] where the format has none.
 ///
 /// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
 pub trait Minifloat:
@@ -841,13 +844,24 @@ macro_rules! __minifloat {
                 }
 
                 let (significand, exponent) = $crate::detail::decompose(x.abs());
+                Self::from_parts(x.is_sign_negative(), significand, exponent)
+            }
+
+            /// Correctly rounded `sign` &times; `significand` &times;
+            /// 2<sup>`exponent`</sup>
+            ///
+            /// This is where every rounding in the crate happens.  The triple
+            /// is an exact number, or one whose lowest bit is sticky, so it
+            /// can come from an [`f64`] or from arithmetic of its own.
+            fn from_parts(negative: bool, significand: u64, exponent: i32) -> Self {
+                let sign_bit = <$bits>::from(negative) << (Self::E + Self::M);
 
                 if significand == 0 {
                     // Without a negative zero, signing a zero spells NaN.
                     return Self::from_bits(<$bits>::from(Self::HAS_NEG_ZERO) * sign_bit);
                 }
 
-                // The exponent of `x`, i.e. `x.abs()` is in [2^e, 2^(e+1)).
+                // The exponent of the value, which is in [2^e, 2^(e+1)).
                 #[allow(clippy::cast_possible_wrap)]
                 let e = exponent + (u64::BITS - 1 - significand.leading_zeros()) as i32;
 
@@ -872,6 +886,40 @@ macro_rules! __minifloat {
                 // reason a zero does.
                 let signed = <$bits>::from(Self::HAS_NEG_ZERO || magnitude != 0);
                 Self::from_bits(magnitude | (signed * sign_bit))
+            }
+
+            /// Split a finite value into exact `(sign, significand, exponent)`
+            ///
+            /// The inverse of [`from_parts`][Self::from_parts] where the value
+            /// is representable: `significand` carries the implicit bit where
+            /// the code has one, and `exponent` is the ULP scale of the code.
+            const fn to_parts(self) -> (bool, u64, i32) {
+                let magnitude = (self.0 & Self::ABS_MASK) as u64;
+                let field = (magnitude >> Self::M) as i32;
+                let fraction = magnitude & ((1 << Self::M) - 1);
+
+                #[allow(clippy::cast_possible_wrap)]
+                if field == 0 {
+                    (self.is_sign_negative(), fraction, 1 - Self::B - Self::M as i32)
+                } else {
+                    (
+                        self.is_sign_negative(),
+                        fraction | 1 << Self::M,
+                        field - Self::B - Self::M as i32,
+                    )
+                }
+            }
+
+            /// The result of an invalid operation
+            ///
+            /// A format without a NaN saturates one to `MAX`, as
+            /// [`from_f64`][Self::from_f64] does for a NaN input.  The sign of
+            /// a default NaN means nothing, so this one is positive.
+            const INVALID: Self = Self(if Self::HAS_NAN { Self::NAN_BITS } else { Self::MAX.0 });
+
+            /// [`HUGE`][Self::HUGE] with the sign an operation worked out
+            const fn huge(negative: bool) -> Self {
+                Self(Self::HUGE.0 | ((negative as $bits) << (Self::E + Self::M)))
             }
 
             /// Best effort conversion to [`f64`]
@@ -968,28 +1016,81 @@ macro_rules! __minifloat {
         impl core::ops::Add for $name {
             type Output = Self;
             fn add(self, rhs: Self) -> Self {
-                Self::from_f64(self.to_f64() + rhs.to_f64())
+                if self.is_nan() || rhs.is_nan() {
+                    return Self::INVALID;
+                }
+                if self.is_infinite() && rhs.is_infinite() {
+                    // Two infinities agree only when their signs do; what the
+                    // other case ought to be is exactly the question.
+                    let agree = self.is_sign_negative() == rhs.is_sign_negative();
+                    return if agree { self } else { Self::INVALID };
+                }
+                if self.is_infinite() || rhs.is_infinite() {
+                    // An infinity outweighs anything finite added to it.
+                    return if self.is_infinite() { self } else { rhs };
+                }
+                let (negative, significand, exponent) = self.to_parts();
+                let (rhs_negative, rhs_significand, rhs_exponent) = rhs.to_parts();
+                let (negative, significand, exponent) = $crate::detail::add_parts(
+                    negative, significand, exponent,
+                    rhs_negative, rhs_significand, rhs_exponent);
+                Self::from_parts(negative, significand, exponent)
             }
         }
 
         impl core::ops::Sub for $name {
             type Output = Self;
             fn sub(self, rhs: Self) -> Self {
-                Self::from_f64(self.to_f64() - rhs.to_f64())
+                self + -rhs
             }
         }
 
         impl core::ops::Mul for $name {
             type Output = Self;
             fn mul(self, rhs: Self) -> Self {
-                Self::from_f64(self.to_f64() * rhs.to_f64())
+                if self.is_nan() || rhs.is_nan() {
+                    return Self::INVALID;
+                }
+                let negative = self.is_sign_negative() != rhs.is_sign_negative();
+                let (_, significand, exponent) = self.to_parts();
+                let (_, rhs_significand, rhs_exponent) = rhs.to_parts();
+
+                if self.is_infinite() || rhs.is_infinite() {
+                    // An infinity scaled by zero is the invalid one; the
+                    // significands say which operand is the zero.
+                    let zero = significand == 0 || rhs_significand == 0;
+                    return if zero { Self::INVALID } else { Self::huge(negative) };
+                }
+                // Two significands of at most 15 bits multiply exactly.
+                Self::from_parts(negative, significand * rhs_significand, exponent + rhs_exponent)
             }
         }
 
         impl core::ops::Div for $name {
             type Output = Self;
             fn div(self, rhs: Self) -> Self {
-                Self::from_f64(self.to_f64() / rhs.to_f64())
+                if self.is_nan() || rhs.is_nan() {
+                    return Self::INVALID;
+                }
+                let negative = self.is_sign_negative() != rhs.is_sign_negative();
+                let (_, significand, exponent) = self.to_parts();
+                let (_, rhs_significand, rhs_exponent) = rhs.to_parts();
+
+                if self.is_infinite() {
+                    // Infinity over infinity is the invalid one.
+                    return if rhs.is_infinite() { Self::INVALID } else { Self::huge(negative) };
+                }
+                if rhs.is_infinite() {
+                    return Self::from_parts(negative, 0, 0);
+                }
+                if rhs_significand == 0 {
+                    // Zero over zero is the invalid one; anything else over
+                    // zero overflows every exponent there is.
+                    return if significand == 0 { Self::INVALID } else { Self::huge(negative) };
+                }
+                let (significand, exponent) = $crate::detail::div_parts(
+                    significand, exponent, rhs_significand, rhs_exponent);
+                Self::from_parts(negative, significand, exponent)
             }
         }
 
