@@ -192,3 +192,42 @@ noise floor.
 
 Use the stopwatch for a change in what the code *does*, like the direct
 subtraction, and the symbol table for a change in *where the code lives*.
+
+## The non-arithmetic surface
+
+*Standing decision, 2026-08-21: no route is built ahead of the round that needs
+it.*
+
+A claim about a classifier &mdash; `is_nan`, `is_infinite`, `is_finite`,
+`classify`, the sign predicates &mdash; is settled by **counting, not timing**.
+Each is a handful of bit operations, so at `-O3` there is nothing for a
+stopwatch to find; what can go wrong is that the body stops reaching the caller,
+and that is a count, per [inlining.md](inlining.md).  `benches/predicates.rs`
+does time `is_nan` and `classify`, and the table above prints them &mdash; but
+as the witness that both sides of an A/B build carry identical bench code, not
+as the gate.
+
+The comparisons *are* timed there for their own sake: `partial_cmp` and
+`total_cmp` have rows on the same four shapes, and that is where a change to
+them gets measured.  The converters have no route of their own: they ride the
+hardware arm of
+`benches/arith.rs`, whose every `f32` row is
+`from_f32(x.to_f32() op y.to_f32())`, so a conversion regression does show up
+there &mdash; mixed with the operator, which is the limitation and the reason a
+standalone route will eventually be worth building.  It gets built by the round
+that first optimizes a converter, not before.
+
+When that round comes, the shape to copy is the Rust sibling,
+[`jdh8/metallic-rs`](https://github.com/jdh8/metallic-rs): one bench file per
+function over a shared harness, the competing implementations as sibling
+criterion rows *in the same binary* &mdash; which is what `benches/arith.rs`
+already does with its soft and hardware arms &mdash; and the input distribution
+declared by the range form instead of left implicit.  Its test side settles the
+budget question that route will raise: a plain sequential traversal of all
+2<sup>32</sup> `f32` bit patterns is routine practice there, so an exhaustive
+sweep is affordable when an exhaustive sweep is what licenses the route.
+`tests/all/ops.rs` now leans on the same fact &mdash; all 2<sup>32</sup> ordered
+pairs of `F16` and `BF16` through `partial_cmp` and `total_cmp` cost 2.5 s of
+the suite's 19 s, striped over the 32 threads of a Ryzen 9 7950X3D on
+2026-08-21 &mdash; not the box in this file's header, which is why the machine
+is named here.
