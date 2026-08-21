@@ -37,6 +37,9 @@ jobs:
         output-file-path: bench-output.txt
         github-token: ${{ secrets.GITHUB_TOKEN }}
         auto-push: true
+        # The action fetches this branch, it does not create it: run
+        # 32475306070 died on `couldn't find remote ref gh-pages`.  It is an
+        # orphan branch, empty until the first publish lands dev/bench/ in it.
         gh-pages-branch: gh-pages
         benchmark-data-dir-path: dev/bench
         # A shared runner's spread is far wider than the idle box's, and this
