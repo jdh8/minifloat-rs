@@ -266,6 +266,11 @@ pub trait Minifloat:
     /// The normative definition is lengthy, but it is essentially comparing
     /// sign-magnitude notations.
     ///
+    /// The comparison is on the *encoding*, so a NaN sits wherever its format
+    /// keeps it: beyond ±[`MAX`][Self::MAX] where it has a sign bit of its own,
+    /// but between the negative numbers and +0 for an [`FNUZ`](Format::FNUZ)
+    /// type, whose NaN occupies the &minus;0 encoding.
+    ///
     /// See also [`f32::total_cmp`],
     /// <https://en.wikipedia.org/wiki/IEEE_754#Total-ordering_predicate>
     #[must_use]
