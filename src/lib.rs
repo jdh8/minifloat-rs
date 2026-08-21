@@ -8,6 +8,7 @@
 
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
+#![warn(clippy::pedantic)]
 
 pub mod detail;
 
@@ -29,7 +30,6 @@ mod sealed {
 ///
 /// [llvm]: https://llvm.org/doxygen/structllvm_1_1APFloatBase.html
 /// [ieee]: https://en.wikipedia.org/wiki/IEEE_754
-#[allow(clippy::upper_case_acronyms)]
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {
@@ -174,6 +174,8 @@ pub trait Minifloat:
     /// Approximate number of significant decimal digits
     ///
     /// Equal to floor([`M`][Self::M] log<sub>10</sub>(2))
+    // A digit count of a minifloat: small and non-negative.  Float-to-int in
+    // const has no `try_from`.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     const DIGITS: u32 = (Self::M as f64 * crate::LOG10_2) as u32;
 
@@ -185,6 +187,8 @@ pub trait Minifloat:
     /// Minimum <var>x</var> such that 10<sup>`x`</sup> is normal
     ///
     /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
+    // A decimal exponent of a minifloat.  Float-to-int in const has no
+    // `try_from`.
     #[allow(clippy::cast_possible_truncation)]
     const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * crate::LOG10_2) as i32;
 
@@ -563,7 +567,6 @@ macro_rules! __minifloat {
             /// The maximum exponent
             ///
             /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
-            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
             pub const MAX_EXP: i32 = (Self::MAX.0 >> Self::M) as i32 - Self::B + 1;
 
             /// One greater than the minimum normal exponent
@@ -579,7 +582,9 @@ macro_rules! __minifloat {
             /// Maximum <var>x</var> such that 10<sup>`x`</sup> is normal
             ///
             /// Equal to floor(log<sub>10</sub>([`MAX`][Self::MAX]))
-            #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+            // A decimal exponent of a minifloat.  Float-to-int in const has
+            // no `try_from`.
+            #[allow(clippy::cast_possible_truncation)]
             pub const MAX_10_EXP: i32 = {
                 // The significand of `MAX` is one bit shorter when the
                 // all-ones magnitude is spent on something else.
@@ -634,11 +639,12 @@ macro_rules! __minifloat {
             /// The difference between 1.0 and the next larger representable number.
             ///
             /// Equal to 2<sup>&minus;`M`</sup>.
-            #[allow(clippy::cast_possible_wrap)]
-            pub const EPSILON: Self = Self(match Self::B - Self::M as i32 {
+            pub const EPSILON: Self = Self(match Self::B - Self::M.cast_signed() {
+                // `s` is a positive exponent of a representable value, so it
+                // fits; `TryFrom` is not const.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 s @ 1.. => (s as $bits) << Self::M,
-                s => 1 << (Self::M as i32 - 1 + s),
+                s => 1 << (Self::M.cast_signed() - 1 + s),
             });
 
             /// The minimum finite number
@@ -675,6 +681,8 @@ macro_rules! __minifloat {
 
             /// Check if the value is NaN
             #[must_use]
+            // A shape whose `HUGE` is the whole magnitude mask never reaches
+            // the `IEEE` arm, where the comparison is then vacuously false.
             #[allow(clippy::bad_bit_mask)]
             #[inline]
             pub const fn is_nan(self) -> bool {
@@ -777,7 +785,9 @@ macro_rules! __minifloat {
             /// always have `sign` equal to ±1, so `sign == 0` unambiguously
             /// identifies NaN.
             #[must_use]
-            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_lossless)]
+            // The exponent field is at most 8 bits wide and debiasing it
+            // leaves a minifloat exponent.  `TryFrom` is not const.
+            #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub const fn integer_decode(self) -> (u64, i16, i8) {
                 if self.is_nan() {
@@ -793,7 +803,7 @@ macro_rules! __minifloat {
                 } else {
                     payload | (1u64 << Self::M)
                 };
-                let bias = Self::M as i32 + Self::B;
+                let bias = Self::M.cast_signed() + Self::B;
                 (mantissa, (exponent - bias) as i16, sign)
             }
 
@@ -888,24 +898,24 @@ macro_rules! __minifloat {
                 }
 
                 // The exponent of the value, which is in [2^e, 2^(e+1)).
-                #[allow(clippy::cast_possible_wrap)]
-                let e = exponent + (u64::BITS - 1 - significand.leading_zeros()) as i32;
+                let e = exponent + (u64::BITS - 1 - significand.leading_zeros()).cast_signed();
 
-                #[allow(clippy::cast_possible_wrap)]
                 let magnitude = if e < Self::MIN_EXP - 1 {
                     // Subnormal numbers all share the ULP of the smallest one,
                     // so their code *is* the rounded multiple of that ULP.
                     $crate::detail::round_to_scale(
-                        significand, exponent, Self::MIN_EXP - 1 - Self::M as i32)
+                        significand, exponent, Self::MIN_EXP - 1 - Self::M.cast_signed())
                 } else {
                     // Rounding to `MANTISSA_DIGITS` may carry into the implicit
                     // bit.  That lands on the next exponent field with a zero
                     // mantissa, which is exactly where the extra ULP belongs.
                     let rounded = $crate::detail::round_to_scale(
-                        significand, exponent, e - Self::M as i32);
+                        significand, exponent, e - Self::M.cast_signed());
                     (i64::from(e + Self::B) << Self::M) + rounded - (1 << Self::M)
                 };
 
+                // Clamped to `HUGE` just above, so it fits and is non-negative;
+                // `TryFrom` is not const-friendly here either.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let magnitude = magnitude.min(i64::from(Self::HUGE.0)) as $bits;
                 // A value that rounds to zero drops its sign for the same
@@ -925,14 +935,13 @@ macro_rules! __minifloat {
                 let field = (magnitude >> Self::M) as i32;
                 let fraction = magnitude & ((1 << Self::M) - 1);
 
-                #[allow(clippy::cast_possible_wrap)]
                 if field == 0 {
-                    (self.is_sign_negative(), fraction, 1 - Self::B - Self::M as i32)
+                    (self.is_sign_negative(), fraction, 1 - Self::B - Self::M.cast_signed())
                 } else {
                     (
                         self.is_sign_negative(),
                         fraction | 1 << Self::M,
-                        field - Self::B - Self::M as i32,
+                        field - Self::B - Self::M.cast_signed(),
                     )
                 }
             }
@@ -1013,27 +1022,24 @@ macro_rules! __minifloat {
                     // expression here stays total for the shapes that never take
                     // this branch, whose rebias is negative.
                     if field == 0 {
-                        #[allow(clippy::cast_possible_wrap)]
-                        let scale =
-                            $crate::detail::exp2i(Self::MIN_EXP - Self::MANTISSA_DIGITS as i32);
+                        let scale = $crate::detail::exp2i(
+                            Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed());
                         return f64::from(magnitude) * scale.copysign(sign);
                     }
                     let shifted =
                         u64::from(magnitude) << (f64::MANTISSA_DIGITS - Self::MANTISSA_DIGITS);
-                    #[allow(clippy::cast_sign_loss)]
                     let rebias =
                         ((Self::MIN_EXP - f64::MIN_EXP) as u64) << (f64::MANTISSA_DIGITS - 1);
                     let sign_bit = u64::from(self.is_sign_negative()) << (u64::BITS - 1);
                     return f64::from_bits(sign_bit | (shifted + rebias));
                 }
 
-                #[allow(clippy::cast_possible_wrap, clippy::cast_lossless)]
                 let (significand, exponent) = if field == 0 {
-                    (magnitude, 1 - Self::B - Self::M as i32)
+                    (magnitude, 1 - Self::B - Self::M.cast_signed())
                 } else {
                     (
                         (magnitude & ((1 << Self::M) - 1)) | 1 << Self::M,
-                        field as i32 - Self::B - Self::M as i32,
+                        i32::from(field) - Self::B - Self::M.cast_signed(),
                     )
                 };
 
@@ -1067,15 +1073,16 @@ macro_rules! __minifloat {
                     }
                     let magnitude = self.to_bits() & Self::ABS_MASK;
                     if magnitude >> Self::M == 0 {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                        // The scale of a shape that fits in `f32` is exact in
+                        // `f32`; the cast only drops `f64`'s spare exponent room.
+                        #[allow(clippy::cast_possible_truncation)]
                         let scale = $crate::detail::exp2i(
-                            Self::MIN_EXP - Self::MANTISSA_DIGITS as i32,
+                            Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed(),
                         ) as f32;
                         return f32::from(magnitude) * scale.copysign(sign);
                     }
                     let shifted =
                         u32::from(magnitude) << (f32::MANTISSA_DIGITS - Self::MANTISSA_DIGITS);
-                    #[allow(clippy::cast_sign_loss)]
                     let rebias =
                         ((Self::MIN_EXP - f32::MIN_EXP) as u32) << (f32::MANTISSA_DIGITS - 1);
                     let sign_bit = u32::from(self.is_sign_negative()) << (u32::BITS - 1);

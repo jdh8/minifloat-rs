@@ -18,8 +18,7 @@
 pub const fn exp2i(x: i32) -> f64 {
     f64::from_bits(match 0x3FF + x {
         0x800.. => 0x7FF << 52,
-        #[allow(clippy::cast_sign_loss)]
-        s @ 1..=0x7FF => (s as u64) << 52,
+        s @ 1..=0x7FF => (s.cast_unsigned() as u64) << 52,
         s @ -51..=0 => 1 << (51 + s),
         _ => 0,
     })
@@ -31,7 +30,6 @@ pub const fn exp2i(x: i32) -> f64 {
 /// 2<sup><var>exponent</var></sup> with no hidden bits, subnormal inputs
 /// included.  The sign is dropped, so callers pass a magnitude.
 #[must_use]
-#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 #[inline]
 pub const fn decompose(x: f64) -> (u64, i32) {
     let bits = x.to_bits();
@@ -39,11 +37,11 @@ pub const fn decompose(x: f64) -> (u64, i32) {
     let fraction = bits & ((1 << (f64::MANTISSA_DIGITS - 1)) - 1);
 
     if field == 0 {
-        (fraction, f64::MIN_EXP - f64::MANTISSA_DIGITS as i32)
+        (fraction, f64::MIN_EXP - f64::MANTISSA_DIGITS.cast_signed())
     } else {
         (
             fraction | 1 << (f64::MANTISSA_DIGITS - 1),
-            field + f64::MIN_EXP - 1 - f64::MANTISSA_DIGITS as i32,
+            field + f64::MIN_EXP - 1 - f64::MANTISSA_DIGITS.cast_signed(),
         )
     }
 }
@@ -112,11 +110,10 @@ const ALIGN_CAP: i32 = 46;
 /// One addend at the common exponent, signed
 ///
 /// An addend below that exponent is one [`ALIGN_CAP`] has already ruled out.
-#[allow(clippy::cast_possible_wrap)]
 #[inline]
 const fn align(negative: bool, significand: u64, exponent: i32, base: i32) -> i64 {
     let magnitude = if exponent >= base {
-        (significand << (exponent - base)) as i64
+        (significand << (exponent - base)).cast_signed()
     } else {
         0
     };
@@ -172,7 +169,6 @@ const QUOTIENT_BITS: u32 = 46;
 /// of headroom instead of proof.  The caller is responsible for a nonzero
 /// divisor and for both significands fitting in 15 bits.
 #[must_use]
-#[allow(clippy::cast_possible_wrap)]
 #[inline]
 pub const fn div_parts(
     significand: u64,
@@ -186,6 +182,6 @@ pub const fn div_parts(
 
     (
         quotient | (remainder != 0) as u64,
-        exponent - rhs_exponent - QUOTIENT_BITS as i32,
+        exponent - rhs_exponent - QUOTIENT_BITS.cast_signed(),
     )
 }

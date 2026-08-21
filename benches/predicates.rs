@@ -38,10 +38,7 @@ impl Lcg {
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            (self.0 >> 32) as u32
-        }
+        (self.0 >> 32) as u32
     }
 }
 

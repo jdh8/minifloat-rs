@@ -39,8 +39,7 @@ fn oracle(bits: Mask, e_width: u32, m_width: u32, bias: i32, format: Format) -> 
     } else {
         (mantissa as f64 + f64::exp2(f64::from(m_width)), exponent as i32 - bias)
     };
-    #[allow(clippy::cast_possible_wrap)]
-    let value = scaled(significand, exponent - m_width as i32);
+    let value = scaled(significand, exponent - m_width.cast_signed());
     sign * value
 }
 

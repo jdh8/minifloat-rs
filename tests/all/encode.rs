@@ -19,17 +19,15 @@ use core::fmt::Debug;
 /// dropped; callers pass a magnitude.
 pub(crate) fn decompose(x: f64) -> (u64, i32) {
     let bits = x.to_bits();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let field = (bits >> (f64::MANTISSA_DIGITS - 1)) as i32;
     let fraction = bits & bit_mask(f64::MANTISSA_DIGITS - 1);
 
-    #[allow(clippy::cast_possible_wrap)]
     if field == 0 {
-        (fraction, f64::MIN_EXP - f64::MANTISSA_DIGITS as i32)
+        (fraction, f64::MIN_EXP - f64::MANTISSA_DIGITS.cast_signed())
     } else {
         (
             fraction | 1 << (f64::MANTISSA_DIGITS - 1),
-            field + f64::MIN_EXP - 1 - f64::MANTISSA_DIGITS as i32,
+            field + f64::MIN_EXP - 1 - f64::MANTISSA_DIGITS.cast_signed(),
         )
     }
 }
@@ -44,9 +42,8 @@ pub(crate) fn cmp_scaled(a: (u128, i32), b: (u128, i32)) -> Ordering {
     if a.0 == 0 || b.0 == 0 {
         return a.0.cmp(&b.0);
     }
-    #[allow(clippy::cast_possible_wrap)]
     let leading = |(significand, exponent): (u128, i32)| {
-        exponent + (u128::BITS - 1 - significand.leading_zeros()) as i32
+        exponent + (u128::BITS - 1 - significand.leading_zeros()).cast_signed()
     };
     match leading(a).cmp(&leading(b)) {
         Ordering::Equal => {}
@@ -70,11 +67,11 @@ pub(crate) fn code_value<T: Minifloat>(code: Mask) -> (u64, i32) {
     let field = code >> T::M;
     let fraction = code & bit_mask(T::M);
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_possible_truncation)]
     if field == 0 {
-        (fraction, 1 - T::B - T::M as i32)
+        (fraction, 1 - T::B - T::M.cast_signed())
     } else {
-        (fraction | 1 << T::M, field as i32 - T::B - T::M as i32)
+        (fraction | 1 << T::M, field as i32 - T::B - T::M.cast_signed())
     }
 }
 
