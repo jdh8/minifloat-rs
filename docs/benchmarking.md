@@ -168,6 +168,32 @@ For reference, the predicate side at e06641b (ns per element, one full pass):
 | `F16` | 0.357 | 0.451 | 1.167 | 0.814 |
 | `BF16` | 0.430 | 0.470 | 1.230 | 0.819 |
 
+## The published page is a tripwire, not a measurement
+
+Every push to `main` runs both bench targets on one `ubuntu-latest` runner at
+`-Ctarget-cpu=x86-64-v3` and pushes the result to
+<https://jdh8.github.io/minifloat-rs/dev/bench/>, one chart per benchmark id,
+via `benchmark-action/github-action-benchmark`.  Nothing on that page is
+hand-written; `.github/workflows/bench.yml` is the whole of it.
+
+It is not a number by the standard at the top of this file.  A shared VM is not
+an idle box, there is no interleaving, no control route, no pinned core, and one
+sample per commit.  So a ratio read off that page does not go in a commit body
+or in the changelog, and it cannot settle a claim against the interleaved
+protocol above.  What it can do is notice a 2x cliff between two commits, which
+neither of the other two routes does at all: the interleaved probe is the first
+opinion, `cargo bench` on the named box is the second, and this is a third
+thing that runs without being asked.  Hence `alert-threshold: 200%` with
+`fail-on-alert: false` &mdash; the page shouts across a cliff and stays quiet
+inside the runner's own spread.
+
+The ISA is pinned rather than `native` because GitHub rotates runners across CPU
+generations, and a series whose ISA changes under it is measuring the fleet.
+That pins the code but not the silicon, and the runner's CPU is the one piece of
+provenance the published data does not carry: `data.js` records commit, author,
+message, and timestamp, and no CPU model or rustc version.  Trends across it are
+readable; levels are not.
+
 ## An operator is timed only against a float that rounds like it
 
 This is the rule behind `route` in `benches/arith.rs`, and it is a correctness
@@ -222,7 +248,9 @@ When that round comes, the shape to copy is the Rust sibling,
 function over a shared harness, the competing implementations as sibling
 criterion rows *in the same binary* &mdash; which is what `benches/arith.rs`
 already does with its soft and hardware arms &mdash; and the input distribution
-declared by the range form instead of left implicit.  Its test side settles the
+declared by the range form instead of left implicit.  Its publishing mechanism
+has already been copied, minus its fan-out, by the section above, so the
+reference is no longer only about file layout.  Its test side settles the
 budget question that route will raise: a plain sequential traversal of all
 2<sup>32</sup> `f32` bit patterns is routine practice there, so an exhaustive
 sweep is affordable when an exhaustive sweep is what licenses the route.

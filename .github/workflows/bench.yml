@@ -1,0 +1,46 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned rather than `native` so a run is comparable to the run before it:
+  # GitHub rotates its Ubuntu runners across CPU generations, and the published
+  # series is a trend across commits, not across hosts.
+  RUSTFLAGS: -Ctarget-cpu=x86-64-v3
+
+defaults:
+  run:
+    # GHA's implicit `bash -e {0}` has no pipefail, so a crashing `cargo bench`
+    # would upload an empty file and silently drop every row from the dataset.
+    shell: bash
+
+jobs:
+  bench:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run benchmarks
+      run: cargo bench -- --output-format bencher | tee bench-output.txt
+    - name: Publish benchmark numbers
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: cargo
+        output-file-path: bench-output.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        gh-pages-branch: gh-pages
+        benchmark-data-dir-path: dev/bench
+        # A shared runner's spread is far wider than the idle box's, and this
+        # page is a tripwire, not a gate.  Alert loudly, never fail the build.
+        alert-threshold: 200%
+        comment-on-alert: false
+        fail-on-alert: false

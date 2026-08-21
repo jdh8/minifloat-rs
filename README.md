@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/minifloat.svg)](https://crates.io/crates/minifloat)
 [![Documentation](https://docs.rs/minifloat/badge.svg)](https://docs.rs/minifloat)
 [![Build Status](https://github.com/jdh8/minifloat-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/jdh8/minifloat-rs)
+[![Benchmark](https://github.com/jdh8/minifloat-rs/actions/workflows/bench.yml/badge.svg)](https://jdh8.github.io/minifloat-rs/dev/bench/)
 
 Rust meta-library for minifloats — emulate floating-point types with fewer
 bits than the built-in `f32` / `f64`, configurable along every axis.
