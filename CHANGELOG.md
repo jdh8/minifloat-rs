@@ -41,6 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to inline and what rustc already does for free, and `benchmarking.md` on the
   protocol behind every number in this project.  `README.md` links to them.
 - `CLAUDE.md`, a routing table into those documents plus the standing rules.
+- The comparison layer is now gated the way the arithmetic already was.
+  `total_cmp` had no test at all; it now faces every ordered pair of all 34
+  shapes in the 8-bit roster, refereed by properties rather than by a second
+  copy of the key: the numeric half of the expectation comes from
+  `partial_cmp`, and only what a value comparison cannot express &mdash; the
+  ±0 split, and where each format parks its NaN &mdash; is stated in encoding
+  terms.  `partial_cmp` against an `f32` referee grows from that roster to all
+  2<sup>32</sup> ordered pairs of `F16` and `BF16`, 2.5 s of the suite's 19 s.
+  `const_eq` and `const_partial_cmp` are swept against `==` and `partial_cmp`
+  over every pair of one shape per format, where they had been `F16` spot
+  checks; `abs` and the sign predicates get their first assertions; and
+  `is_finite` joins the one-hot `classify` sweep.
+- `Minifloat::total_cmp` now documents that the order is on the *encoding*, so
+  an `FNUZ` NaN &mdash; which occupies the &minus;0 slot &mdash; orders between
+  the negative numbers and +0 rather than beyond ±`MAX`.  Behaviour is
+  unchanged; the new sweep pins it.
 
 ### Changed
 
