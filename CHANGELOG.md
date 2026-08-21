@@ -147,6 +147,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0.997&ndash;1.008x.  `FNUZ` subtraction against its own addition goes from
   1.18x to 0.98x, and the three `FNUZ` subtractions a round trip through `f32`
   used to beat are no longer among them.
+- The `as` casts in the library now say what they mean.  `cast_signed` and
+  `cast_unsigned` &mdash; const-stable and lowering to the same instruction
+  &mdash; replace the sign-flipping casts, and `i32::from` replaces the one
+  widening cast on a non-const path, so 14 of the 24 `#[allow(clippy::…)]`
+  attributes in `src/` are gone rather than suppressed.  What survives is cut to
+  the single lint that fires and carries a one-line reason: float-to-int in a
+  `const` initialiser, a provably-in-range narrowing where `TryFrom` is not
+  const, and the `f64`-to-`f32` cast that *is* the rounding `to_f32` performs.
+  The same rewrites went into the test crate where they read better on their own
+  terms.
+- **`src/lib.rs` now carries `#![warn(clippy::pedantic)]`.**  The suppressions
+  above were bookkeeping nothing checked, and 13 of the lints they named had
+  already gone stale.  `cargo clippy --all-targets` is the gate now, and a new
+  cast that needs an attribute cannot land without one.  The lint is an inner
+  attribute, so it is crate-local: dependents and the README doctests see
+  nothing.  The test crate is deliberately left out &mdash; pedantic there
+  trades `assert_eq!`'s diff for a bare `assert!` and asks for comments
+  explaining that a rounding test rounds.
 
 ### Removed
 
