@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to inline and what rustc already does for free, and `benchmarking.md` on the
   protocol behind every number in this project.  `README.md` links to them.
 - `CLAUDE.md`, a routing table into those documents plus the standing rules.
+- A published benchmark page, <https://jdh8.github.io/minifloat-rs/dev/bench/>,
+  refreshed on every push to `main` by `.github/workflows/bench.yml`.  It is a
+  trend line rather than a claim: one shared runner, no interleaving, no control
+  route, one sample per commit, so a ratio read off it does not go in a commit
+  body or in this file.  It exists to notice a 2x cliff between two commits, and
+  `docs/benchmarking.md` says so where it says what a number here means.
 - The comparison layer is now gated the way the arithmetic already was.
   `total_cmp` had no test at all; it now faces every ordered pair of all 34
   shapes in the 8-bit roster, refereed by properties rather than by a second
