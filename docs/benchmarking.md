@@ -126,9 +126,17 @@ aggregate is reportable, and saying which one you have is the result.
 The band is not reusable.  It varies with row duration *and* with how much of
 `.text` the change moved: the C++ sibling measured 0.971x–1.025x and
 0.886x–1.093x over the same 56 operator rows at the same durations, for two
-different build pairs (`../minifloat` 835d362, which cites this file back).
-Calibrate every round; a band inherited from another change is not this change's
-band.  A null recorded is still worth more than a null dressed up.
+different build pairs.  Those two halves are not equally solid, and it is worth
+knowing which is which, because it is the pair of them that separates *varies by
+build pair* from *varies by row duration*: 0.886x&ndash;1.093x rebuilds from two
+commits, while 0.971x&ndash;1.025x was measured against a patch that was
+reverted, so only one of its sides survives in the history (`../minifloat`
+ca2d8cc, which says which rows are which and cites this file back).  Treat that
+separation as indicated rather than settled &mdash; and if you measure a variant
+you intend to throw away, commit it on a throwaway ref before you throw it away.
+
+Calibrate every round regardless; a band inherited from another change is not
+this change's band.  A null recorded is still worth more than a null dressed up.
 
 ## Corroborate from the other side
 
