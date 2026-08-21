@@ -33,8 +33,10 @@ in their own doc comments.
 `detail::round_to_scale`.  One rounding, so no intermediate can lose what the
 format is able to hold, and a shape whose exponent range overruns `f64`'s is
 served as exactly as any other.  The crate's other two roundings are outbound
-and unrelated: the `as f32` cast at the end of `to_f32`, and `to_f64` itself
-once a shape's exponent leaves `f64`'s range.
+and unrelated, and both now belong to fallback paths: the `as f32` cast that
+ends `to_f32` where the shape does not fit, and `to_f64` itself once a shape's
+exponent leaves `f64`'s range.  A shape the target holds exactly takes neither.
+`to_f32` and `to_f64` reassemble the target's bits and round nothing at all.
 
 The special cases stopped borrowing `f64`'s at the same time.  An invalid
 operation yields the format's NaN, or `MAX` where the format has none, rather
@@ -48,11 +50,26 @@ required to agree.  They are gone, and the survivor is not the slower one.
 `benches/arith.rs` times each operator twice over the same operands — once as
 the crate computes it, once the way a caller would fake it.
 
-As of 2026-08-21, after the direct subtraction below, the integer route wins
-**56 of 56** comparisons, geomean **1.709x** in its favour, from 1.01x
-(`BF16` addition, the narrowest margin) to 2.63x (`F8E4M3FN` multiplication).
-That is up from **53 of 56** at c4c28b1, whose three losses were all `FNUZ`
-subtraction.
+As of 2026-08-21, after the exact conversions below, the integer route wins
+**42 of 56** comparisons, geomean **1.110x** in its favour, from 0.74x
+(`E11M4` addition) to 1.44x (`E2M13` multiplication).  This paragraph used to
+say 56 of 56 at 1.709x, and reading the fall as a regression would be exactly
+backwards: no operator changed.  `to_f32` and `to_f64` did, and they belong to
+the *comparator* &mdash; the soft arm of `bench_op!` is the bare operator and
+calls neither.
+
+The two halves were measured apart so the direction is not in doubt.  Min of
+fifteen interleaved passes over the same binaries: the hardware route fell to
+**0.626x** (0.455x to 0.806x) while the soft route held at **1.006x**, its 56
+bench bodies confirmed byte-identical across the pair in the symbol table.  A
+separate three-pass full-roster run reproduces both to three decimals on the
+shapes they share, and its own before-side reproduces the old 1.709x as 1.703x.
+
+All fourteen losses are additions or subtractions &mdash; nine and five &mdash;
+the operators that do the most work against a round trip that does the least.
+Nothing was traded for them.  They are the same operators at the same speed,
+now measured against a comparator that no longer pays for an `exp2i` and an
+int&rarr;float convert on every operand and every result.
 
 The speed is a bonus.  The reason is correctness: the hardware route cannot
 referee a shape it cannot hold, so keeping it would have meant keeping a route
@@ -189,6 +206,15 @@ on `HAS_EXACT_F64_CONVERSION` and use a single scale factor.  The disassembly of
 a dependent crate already shows one `vmulsd` for the scale: where the exponent
 provably stays inside `f64`'s range, LLVM folds `exp2i(exponent − head)` to 1.0
 and drops the multiply on its own.  The branch would have been dead weight.
+
+*Superseded 2026-08-21 &mdash; by a different question, which is why the lesson
+stands.*  That null asked whether a *second* scale multiply could be skipped,
+and its answer, that LLVM had already folded it, was correct and still is.
+Reassembling the target's bits is not a larger version of that idea: it deletes
+the int&rarr;float convert and the surviving multiply together, leaving a shift,
+an add and a bit-cast, so there is nothing for LLVM to fold because there is no
+arithmetic left.  Measured at 0.626x on the hardware route (above).  A null
+about removing one instruction bounds nothing about removing the computation.
 
 **Fusing the `is_finite` comparison: not needed.**  `!is_nan() && !is_infinite()`
 compiles to four instructions for `F16` —
