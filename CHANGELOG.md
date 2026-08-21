@@ -102,6 +102,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than assumed.
 - `from_f32` widens to `f64` and `to_f32` casts down from `to_f64`, each still
   rounding exactly once.
+- **`to_f32` and `to_f64` reassemble the target's bits where the shape fits in
+  it.**  A value the target holds exactly needs no arithmetic to decode: NaN,
+  an infinity, a subnormal and a normal each take their own branch, and the
+  normal branch is a shift, an add and a bit-cast.  The old route &mdash; count
+  the subnormal ULPs, convert, scale by `exp2i`, and for `to_f32` cast the
+  result down &mdash; is untouched for the shapes that still need it, and still
+  rounds exactly once.  The arm is gated on the existing
+  `HAS_EXACT_F32_CONVERSION` / `HAS_EXACT_F64_CONVERSION`, so it folds away per
+  type.  Min across 15 interleaved passes of alternating builds: the conversion
+  route 0.626x, from 0.455x (`F8E4M3FN` division) to 0.806x (`BF16` division),
+  with the operator route &mdash; which calls neither conversion &mdash; flat at
+  1.006x and its 56 bench bodies verified byte-identical in the symbol table.
+  `from_f32` and `from_f64` are unchanged.
+
+  The benchmark's headline moves with the comparator, not the crate: the
+  integer route now wins **42 of 56** comparisons at geomean 1.110x, where the
+  same binaries measured 56 of 56 at 1.703x before the change.  All fourteen
+  losses are additions or subtractions.
 - **Subtraction no longer builds a negated operand.**  `Sub` was `self + -rhs`,
   which made a format without a negative zero pay for the guard its negation
   needs &mdash; the code a zero would flip into is its NaN &mdash; on every
@@ -111,9 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interleaved passes of alternating builds: `FNUZ` subtraction 0.773&ndash;0.781x,
   addition 0.93&ndash;0.94x, an untouched `mul` control flat at
   0.997&ndash;1.008x.  `FNUZ` subtraction against its own addition goes from
-  1.18x to 0.98x, and the crate's integer route now wins **all 56** of the
-  benchmark's comparisons against a round trip through a hardware float
-  (geomean 1.709x), where it used to lose three.
+  1.18x to 0.98x, and the three `FNUZ` subtractions a round trip through `f32`
+  used to beat are no longer among them.
 
 ### Removed
 
