@@ -64,15 +64,15 @@ pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64
     let shift = target - exponent;
 
     if shift <= 0 {
-        return (significand << -shift) as i64;
+        return (significand << -shift).cast_signed();
     }
-    if shift >= u64::BITS as i32 {
+    if shift >= u64::BITS.cast_signed() {
         return 0;
     }
     let dropped = significand & ((1 << shift) - 1);
     let kept = significand >> shift;
     let half = 1 << (shift - 1);
-    (kept + (dropped > half || dropped == half && kept & 1 != 0) as u64) as i64
+    (kept + (dropped > half || dropped == half && kept & 1 != 0) as u64).cast_signed()
 }
 
 /// log<sub>2</sub>(1 &minus; 2<sup>&minus;`p`</sup>) indexed by precision `p`

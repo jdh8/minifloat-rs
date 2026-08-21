@@ -34,36 +34,33 @@ fn test_eq() {
 
             assert_eq!(same_mini(T::ZERO, T::from_f32(-0.0)), !T::HAS_NEG_ZERO);
 
-            match T::NAN {
-                Some(nan) => {
-                    assert!(nan.is_nan());
-                    assert!(T::from_f32(f32::NAN).is_nan());
-                    assert!(T::from_f64(f64::NAN).is_nan());
+            if let Some(nan) = T::NAN {
+                assert!(nan.is_nan());
+                assert!(T::from_f32(f32::NAN).is_nan());
+                assert!(T::from_f64(f64::NAN).is_nan());
 
-                    assert!(nan.ne(&nan));
-                    assert!(same_mini(nan, nan));
-                }
+                assert!(nan.ne(&nan));
+                assert!(same_mini(nan, nan));
+            } else {
                 // Without a NaN encoding, a NaN input saturates to the maximum
                 // finite value with the sign preserved.
-                None => {
-                    assert!(same_mini(T::from_f32(f32::NAN), T::MAX));
-                    assert!(same_mini(T::from_f64(f64::NAN), T::MAX));
-                    assert!(same_mini(T::from_f32(-f32::NAN), T::MIN));
-                    assert!(same_mini(T::from_f64(-f64::NAN), T::MIN));
+                assert!(same_mini(T::from_f32(f32::NAN), T::MAX));
+                assert!(same_mini(T::from_f64(f64::NAN), T::MAX));
+                assert!(same_mini(T::from_f32(-f32::NAN), T::MIN));
+                assert!(same_mini(T::from_f64(-f64::NAN), T::MIN));
 
-                    // An all-ones payload carries out of the exponent field if
-                    // it ever reaches the rounding path.
-                    assert!(same_mini(T::from_f32(f32::from_bits(0x7FFF_FFFF)), T::MAX));
-                    assert!(same_mini(T::from_f32(f32::from_bits(0xFFFF_FFFF)), T::MIN));
-                    assert!(same_mini(
-                        T::from_f64(f64::from_bits(0x7FFF_FFFF_FFFF_FFFF)),
-                        T::MAX
-                    ));
-                    assert!(same_mini(
-                        T::from_f64(f64::from_bits(0xFFFF_FFFF_FFFF_FFFF)),
-                        T::MIN
-                    ));
-                }
+                // An all-ones payload carries out of the exponent field if
+                // it ever reaches the rounding path.
+                assert!(same_mini(T::from_f32(f32::from_bits(0x7FFF_FFFF)), T::MAX));
+                assert!(same_mini(T::from_f32(f32::from_bits(0xFFFF_FFFF)), T::MIN));
+                assert!(same_mini(
+                    T::from_f64(f64::from_bits(0x7FFF_FFFF_FFFF_FFFF)),
+                    T::MAX
+                ));
+                assert!(same_mini(
+                    T::from_f64(f64::from_bits(0xFFFF_FFFF_FFFF_FFFF)),
+                    T::MIN
+                ));
             }
 
             for_all::<T>(|x| x.ne(&x) == x.is_nan())
