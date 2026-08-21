@@ -49,6 +49,22 @@ Interleaving cancels the drift instead of hoping it is not there.  `taskset`
 pins both sides to the same core so neither can win by landing on a better one;
 core 2 is an arbitrary choice, held constant.
 
+Held constant *within a comparison*, not across sessions.  On 2026-08-21 two
+agents &mdash; one on this crate, one on the C++ sibling &mdash; both read this
+line, both ran `taskset -c 2`, and collided on the one physical core this
+document names.  Check the core is free before pinning to it:
+
+```sh
+ps -eo psr,pcpu,args --sort=-pcpu | awk '$1==6'      # who is on core 6
+cat /sys/devices/system/cpu/cpu6/topology/thread_siblings_list
+```
+
+Take the SMT sibling too, or the other thread of your core is someone else's.
+And do not gate on `/proc/loadavg`: it counts runnable tasks absolutely, not per
+core, so on this 16-thread box one pinned neighbour already reads 1.0 and a
+threshold near zero can never clear.  The question is whether *your* core is
+free, which loadavg does not answer.
+
 ## Take the minimum, not the mean
 
 Noise on a benchmark is one-sided: nothing makes a loop run faster than it can,
@@ -62,6 +78,13 @@ where criterion reports no slope, and take the minimum **across passes** per
 benchmark.  Criterion has no min-of-N mode of its own — its per-run figure is
 already an aggregate, and this protocol treats each run as one sample.
 
+That the minimum sheds a transient rather than averaging it in was measured on
+2026-08-21, when a sustained all-core build from another session landed across
+passes 7&ndash;9 of a fifteen-pass sweep.  Harvesting all fifteen and harvesting
+with those three dropped gave 0.626x and 0.624x on the measured route, with the
+control unmoved at 1.006x either way.  Before that this section argued
+one-sided noise and cited nothing.
+
 ## Keep a control route
 
 Every sweep carries at least one benchmark the change cannot possibly have
@@ -70,12 +93,41 @@ noise with it.  In this round's subtraction sweep the control was `mul` on the
 same four shapes; it came back at 0.997–1.008x while `sub` moved to 0.773x,
 which is what makes the 0.773x reportable.
 
-## The noise floor is 0.98x
+## The noise floor is not a constant
 
 Variants that changed nothing on the measured path have come back at 0.98x on
-this box (6520d5a).  A ratio inside `[0.98, 1.02]` is not a result.  Say so
-plainly rather than reporting it as a small win — a null recorded is worth more
-than a null dressed up.
+this box (6520d5a), and this section used to stop there: a ratio inside
+`[0.98, 1.02]` is not a result.  That bounds *timing* noise.  It does not bound
+code placement, which is larger, and which interleaving cannot touch.
+
+Measured on 2026-08-21, on the exact-conversion round.  `benches/arith.rs`
+numbers its closures `shape * 12 + op * 3 + {soft, f32-arm, f64-arm}`, the
+un-instantiated route arm simply absent, so every bench body is individually
+addressable in the symbol table.  Diffing the two binaries body by body, with
+branch targets and rip-relative displacements normalised, gave 56 soft bodies
+byte-identical and 56 hardware bodies changed — exactly the split the change
+predicts.  `.text` shrank 2816 bytes and relocated all 112.  Those 56
+byte-identical soft rows then measured **0.962x to 1.090x**, min of fifteen
+interleaved passes.  Nine percent, on code that did not change an instruction.
+
+No number of passes fixes this.  Placement is a property of the binary, not of
+the run, so re-running measures it again rather than testing it — which is how
+the C++ sibling came to report a cross-compiler disagreement whose whole
+evidence was that it reproduced across two runs of the same two binaries
+(retracted, 855686c).
+
+So the control rows are not a sanity check.  They are a **calibration**: their
+spread is the band this build pair can produce on rows of this duration, and a
+per-row claim is reportable exactly when it clears that band.  This round's
+hardware rows spanned 0.455x to 0.806x against a control band of 0.962x to
+1.090x — disjoint, so every row stands on its own.  Where they overlap, only the
+aggregate is reportable, and saying which one you have is the result.
+
+The band is not reusable.  It varies with row duration *and* with how much of
+`.text` the change moved: the sibling measured 0.971x–1.025x and 0.886x–1.093x
+over the same 56 operator rows at the same durations, for two different build
+pairs.  Calibrate every round; a band inherited from another change is not this
+change's band.  A null recorded is still worth more than a null dressed up.
 
 ## Corroborate from the other side
 

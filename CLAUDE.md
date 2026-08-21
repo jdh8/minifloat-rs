@@ -46,8 +46,10 @@ rather than adding an `#[allow]`.  CI does not run it — CI is `cargo build
 every core.  `pgrep -af poker` first, and if it is running, ask — never kill it
 unasked.  The protocol is [docs/benchmarking.md](docs/benchmarking.md), and it
 is not optional: interleaved builds, min-of-N across at least 15 alternating
-passes each, a control route the change cannot touch, and a 0.98x noise floor
-below which there is no result to report.
+passes each, and a control route.  The control's own spread *is* the noise
+floor for that build pair — calibrate it every round rather than assuming
+0.98x, and check in the symbol table that the control's code is actually
+unchanged.  Relocation alone moved byte-identical rows 9% on 2026-08-21.
 
 ## The correctness gate
 
