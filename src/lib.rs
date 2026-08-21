@@ -1001,6 +1001,27 @@ macro_rules! __minifloat {
                 let magnitude = self.to_bits() & Self::ABS_MASK;
                 let field = magnitude >> Self::M;
 
+                if Self::HAS_EXACT_F64_CONVERSION {
+                    // A shape that fits needs no rounding at all: a subnormal is
+                    // its code times the ULP, exactly, and a normal value is its
+                    // own bits with the exponent field rebiased.  Every
+                    // expression here stays total for the shapes that never take
+                    // this branch, whose rebias is negative.
+                    if field == 0 {
+                        #[allow(clippy::cast_possible_wrap)]
+                        let scale =
+                            $crate::detail::exp2i(Self::MIN_EXP - Self::MANTISSA_DIGITS as i32);
+                        return f64::from(magnitude) * scale.copysign(sign);
+                    }
+                    let shifted =
+                        u64::from(magnitude) << (f64::MANTISSA_DIGITS - Self::MANTISSA_DIGITS);
+                    #[allow(clippy::cast_sign_loss)]
+                    let rebias =
+                        ((Self::MIN_EXP - f64::MIN_EXP) as u64) << (f64::MANTISSA_DIGITS - 1);
+                    let sign_bit = u64::from(self.is_sign_negative()) << (u64::BITS - 1);
+                    return f64::from_bits(sign_bit | (shifted + rebias));
+                }
+
                 #[allow(clippy::cast_possible_wrap, clippy::cast_lossless)]
                 let (significand, exponent) = if field == 0 {
                     (magnitude, 1 - Self::B - Self::M as i32)
@@ -1025,11 +1046,37 @@ macro_rules! __minifloat {
             #[must_use]
             #[inline]
             pub fn to_f32(self) -> f32 {
+                let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
+
                 if self.is_nan() {
                     // A narrowing cast is not specified to keep the NaN sign.
-                    let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
                     return f32::NAN.copysign(sign);
                 }
+
+                if Self::HAS_EXACT_F32_CONVERSION {
+                    // Same reassembly as `to_f64`, one size down; see there for
+                    // why nothing rounds and nothing can fail for a shape that
+                    // skips this.
+                    if self.is_infinite() {
+                        return f32::INFINITY * sign;
+                    }
+                    let magnitude = self.to_bits() & Self::ABS_MASK;
+                    if magnitude >> Self::M == 0 {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                        let scale = $crate::detail::exp2i(
+                            Self::MIN_EXP - Self::MANTISSA_DIGITS as i32,
+                        ) as f32;
+                        return f32::from(magnitude) * scale.copysign(sign);
+                    }
+                    let shifted =
+                        u32::from(magnitude) << (f32::MANTISSA_DIGITS - Self::MANTISSA_DIGITS);
+                    #[allow(clippy::cast_sign_loss)]
+                    let rebias =
+                        ((Self::MIN_EXP - f32::MIN_EXP) as u32) << (f32::MANTISSA_DIGITS - 1);
+                    let sign_bit = u32::from(self.is_sign_negative()) << (u32::BITS - 1);
+                    return f32::from_bits(sign_bit | (shifted + rebias));
+                }
+
                 // Conversion to `f64` is exact but for exponents out of its
                 // range, which are out of `f32`'s range too.  Either way the
                 // cast below is the only rounding.
