@@ -124,10 +124,11 @@ hardware rows spanned 0.455x to 0.806x against a control band of 0.962x to
 aggregate is reportable, and saying which one you have is the result.
 
 The band is not reusable.  It varies with row duration *and* with how much of
-`.text` the change moved: the sibling measured 0.971x–1.025x and 0.886x–1.093x
-over the same 56 operator rows at the same durations, for two different build
-pairs.  Calibrate every round; a band inherited from another change is not this
-change's band.  A null recorded is still worth more than a null dressed up.
+`.text` the change moved: the C++ sibling measured 0.971x–1.025x and
+0.886x–1.093x over the same 56 operator rows at the same durations, for two
+different build pairs (`../minifloat` 835d362, which cites this file back).
+Calibrate every round; a band inherited from another change is not this change's
+band.  A null recorded is still worth more than a null dressed up.
 
 ## Corroborate from the other side
 
