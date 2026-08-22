@@ -129,26 +129,29 @@ fn test_max_10_exp() {
     const _: () = assert!(F6E3M2FN::MAX_10_EXP == 1);
 }
 
-/// `DIGITS` and `MIN_10_EXP` have no other caller in the suite
+/// `DIGITS` and `MIN_10_EXP`, in both spellings
 ///
-/// They are the only two constants in the crate that `__minifloat!` does not
-/// re-export inherently — `F16::RADIX` compiles, `F16::DIGITS` does not — so
-/// nothing reaches them except through the trait, and until this test nothing
-/// did.  Both are float math truncated to an integer under an `#[allow]`, and
-/// the truncation is what has to be right: toward zero is `floor` for
-/// `DIGITS`, which is non-negative, and `ceil` for `MIN_10_EXP`, which is not.
+/// Both are float math truncated to an integer under an `#[allow]`, and the
+/// truncation is what has to be right: toward zero is `floor` for `DIGITS`,
+/// which is non-negative, and `ceil` for `MIN_10_EXP`, which is not.  Until
+/// this test nothing in the suite reached either one.
 #[test]
 fn test_decimal_digits() {
     // `BF16` has `f32`'s exponent range exactly, so the standard library
     // referees this one.
-    const _: () = assert!(<BF16 as Minifloat>::MIN_10_EXP == f32::MIN_10_EXP);
+    const _: () = assert!(BF16::MIN_10_EXP == f32::MIN_10_EXP);
 
-    const _: () = assert!(<F16 as Minifloat>::DIGITS == 3);
-    const _: () = assert!(<BF16 as Minifloat>::DIGITS == 2);
-    const _: () = assert!(<F8E4M3FN as Minifloat>::DIGITS == 0);
+    const _: () = assert!(F16::DIGITS == 3);
+    const _: () = assert!(BF16::DIGITS == 2);
+    const _: () = assert!(F8E4M3FN::DIGITS == 0);
 
-    const _: () = assert!(<F16 as Minifloat>::MIN_10_EXP == -4);
-    const _: () = assert!(<F8E4M3FN as Minifloat>::MIN_10_EXP == -1);
+    const _: () = assert!(F16::MIN_10_EXP == -4);
+    const _: () = assert!(F8E4M3FN::MIN_10_EXP == -1);
+
+    // The inherent constant and the trait one are the same constant, as they
+    // are for every other pair the macro re-exports.
+    const _: () = assert!(F16::DIGITS == <F16 as Minifloat>::DIGITS);
+    const _: () = assert!(F16::MIN_10_EXP == <F16 as Minifloat>::MIN_10_EXP);
 }
 
 #[test]

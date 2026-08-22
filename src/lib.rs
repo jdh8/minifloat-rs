@@ -564,6 +564,11 @@ macro_rules! __minifloat {
             /// Equal to [`M`][Self::M] + 1
             pub const MANTISSA_DIGITS: u32 = <Self as $crate::Minifloat>::MANTISSA_DIGITS;
 
+            /// Approximate number of significant decimal digits
+            ///
+            /// Equal to floor([`M`][Self::M] log<sub>10</sub>(2))
+            pub const DIGITS: u32 = <Self as $crate::Minifloat>::DIGITS;
+
             /// The maximum exponent
             ///
             /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
@@ -594,6 +599,11 @@ macro_rules! __minifloat {
                     + $crate::detail::LOG2_SIGNIFICAND[precision as usize];
                 (log2_max * core::f64::consts::LOG10_2) as i32
             };
+
+            /// Minimum <var>x</var> such that 10<sup>`x`</sup> is normal
+            ///
+            /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
+            pub const MIN_10_EXP: i32 = <Self as $crate::Minifloat>::MIN_10_EXP;
 
             /// Whether every value of this type is exactly representable as [`f32`]
             ///
