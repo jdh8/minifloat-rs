@@ -5,6 +5,67 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`u32` storage, and with it minifloats up to 32 bits wide.**
+  `Minifloat::Bits` admits `u32` beside `u8` and `u16`.  The ceiling is not a
+  policy about how wide a minifloat ought to be: it is where the `u64` kernels
+  run out.  With `E` &ge; 2 in 32 bits the precision <var>p</var> reaches 30, a
+  product of two significands is 60 bits, and the aligned sum and the quotient
+  both still fit.  `docs/arithmetic.md` carries the bound table.
+- **`BF20`**, S1E8M11 &mdash; `f32`'s exponent range with 11 fraction bits kept.
+  It is the one predefined type outside LLVM's set, and the accumulator format
+  et-toolchain's C model does its MAC and SACC arithmetic in.  Like every other
+  predefined type it opts into the lossless `From` impls for `f32` and `f64`.
+- The test roster formerly called `test_16_bits` is now `test_wide_shapes` and
+  carries six `u32` shapes beside the nine 16-bit ones: `BF20`, `E8M22` (the
+  last E8 shape `f64` can referee), `E8M23`, `E6M25` (gaps past `ALIGN_CAP` with
+  the widest significand that allows them), `E2M29` (<var>p</var> = 30), and
+  `E2M29FNUZ`.  Four billion codes is too many to walk, so `support::codes`
+  samples: exhaustive through 20 bits, then an odd stride landing near a
+  million, odd so every low-bit pattern and hence every tie parity is still
+  visited.
+- `test_f32_shape_matches_hardware`, the one arithmetic gate in the suite with
+  no Figueroa caveat: `E8M23` *is* `f32`, so 2<sup>22</sup> pairs of it through
+  all four operators have to land on the FPU's own bits &mdash; the sign of a
+  zero, the ±∞ an overflow or a division by zero produces, and every subnormal
+  result.  `test_f32_shape_matches_core` pins its constants against `core::f32`
+  the same way.
+
+### Changed
+
+- `detail::ALIGN_CAP` is 32, down from 46.  Two bounds fix it: a dropped far
+  addend has to round back to the other, which needs the cap to be at least
+  <var>p</var> + 1, and the aligned sum has to stay in an `i64`, which needs
+  <var>p</var> + cap &le; 63.  46 no longer fits, and would overflow the sum.
+- `detail::div_parts` normalises the dividend to bit 62 instead of shifting by
+  a fixed `QUOTIENT_BITS`, which is deleted.  A fixed shift is not merely tight
+  but wrong: a subnormal dividend over a full-width divisor leaves 63 &minus;
+  2<var>p</var> quotient bits, below the <var>p</var> + 2 that rounding needs
+  once <var>p</var> &gt; 20.  Both this and the cap are gated by mutation &mdash;
+  putting either back fails `test_arithmetic_correctly_rounded_wide` &mdash; and
+  neither mutation is visible to any 16-bit shape.
+- `minifloat!` now asserts that both ends of the ULP scale fit the `i16` that
+  `integer_decode` returns.  The condition is on the exponent *range* and not on
+  `E`, because a custom bias slides the range under any width; with the default
+  bias any `E` up to 15 passes.  Nothing that compiled before is rejected: no
+  16-bit shape could reach an `i16` wrap, since `MAX_EXP >= 1` already forces
+  the bias down.
+- `to_f32`'s subnormal branch scales in `f64` and casts once, since `f32::from`
+  has no `u32` impl.  The product is an `f32` value, so the cast rounds nothing;
+  that is what `HAS_EXACT_F32_CONVERSION` guarantees.  Its exact normal branch
+  shifts by a `saturating_sub`, which keeps the expression total for a shape
+  whose precision overruns `f32`'s and which never takes the branch.
+- `test_arithmetic_16bit_sampled` is `test_arithmetic_wide_sampled` and gates on
+  `route`'s rule rather than on exactness alone: past 2<var>p</var> + 2 = 53 the
+  `f64` operation itself double-rounds where the shape does not, so `E6M25` and
+  `E2M29` fall to the exact oracle instead of to a referee that is wrong.
+  `test_arithmetic_correctly_rounded_16bit` is `_wide` and draws 2<sup>12</sup>
+  pairs with a subnormal left operand on top of its 2<sup>16</sup> uniform
+  ones, which is the case the normalised dividend exists for.
+
 ## [0.3.0] &mdash; 2026-08-22
 
 ### Added
