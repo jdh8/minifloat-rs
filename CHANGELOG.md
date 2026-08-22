@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] &mdash; 0.3.0
+## [0.3.0] &mdash; 2026-08-22
 
 ### Added
 
@@ -183,6 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   const, and the `f64`-to-`f32` cast that *is* the rounding `to_f32` performs.
   The same rewrites went into the test crate where they read better on their own
   terms.
+- **The crate declares `rust-version = "1.87"`.**  That is where `cast_signed`
+  and `cast_unsigned` became const-stable, and the casts above are written in
+  terms of them, so 1.87 is the floor as of this release.  Stating it earns a
+  1.86 toolchain one message about the toolchain instead of 220 about an
+  unstable feature.
 - **`src/lib.rs` now carries `#![warn(clippy::pedantic)]`.**  The suppressions
   above were bookkeeping nothing checked, and 13 of the lints they named had
   already gone stale.  `cargo clippy --all-targets` is the gate now, and a new
