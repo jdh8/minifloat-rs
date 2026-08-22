@@ -53,9 +53,9 @@ pub const fn decompose(x: f64) -> (u64, i32) {
 /// an integer significand keeps this exact for exponents far outside the range
 /// of any hardware float.
 ///
-/// The caller is responsible for the quotient fitting in an [`i64`]; a
-/// minifloat code is at most 16 bits wide, so every call here has room to
-/// spare.
+/// The caller is responsible for the quotient fitting in an [`i64`]: every
+/// significand handed in here is at most 2<sup>63</sup>, so a shift that only
+/// ever narrows it has room to spare.
 #[must_use]
 #[inline]
 pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64 {
@@ -79,7 +79,7 @@ pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64
 /// value with that precision.  Index 0 is unreachable — the precision of a
 /// maximum finite value is always at least 1 — and its entry is a leftover.
 #[allow(clippy::excessive_precision)]
-pub const LOG2_SIGNIFICAND: [f64; 16] = [
+pub const LOG2_SIGNIFICAND: [f64; 32] = [
     -2.0,
     -1.0,
     -4.150_374_992_788_438_13e-1,
@@ -96,16 +96,36 @@ pub const LOG2_SIGNIFICAND: [f64; 16] = [
     -1.761_209_842_740_240_62e-4,
     -8.805_780_458_002_638_34e-5,
     -4.402_823_044_177_721_15e-5,
+    -2.201_394_726_395_550_20e-5,
+    -1.100_693_164_338_518_64e-5,
+    -5.503_455_324_624_539_28e-6,
+    -2.751_725_038_055_266_97e-6,
+    -1.375_861_862_964_634_16e-6,
+    -6.879_307_674_667_236_69e-7,
+    -3.439_653_427_294_830_34e-7,
+    -1.719_826_611_137_742_61e-7,
+    -8.599_132_799_414_562_18e-8,
+    -4.299_566_335_638_747_19e-8,
+    -2.149_783_151_802_240_60e-8,
+    -1.074_891_571_896_837_11e-8,
+    -5.374_457_849_473_477_65e-9,
+    -2.687_228_922_234_061_86e-9,
+    -1.343_614_460_491_361_69e-9,
+    -6.718_072_300_892_635_35e-10,
 ];
 
 /// Widest exponent gap an aligned sum spans
 ///
 /// An addend further below the other than this cannot move it at all: the
 /// other is a representable value, and anything under half its ULP rounds
-/// straight back to it.  Dropping such an addend is also what keeps the
-/// aligned sum inside an [`i64`], two 15-bit significands and this shift being
-/// 62 bits at worst.
-const ALIGN_CAP: i32 = 46;
+/// straight back to it.  That is the lower bound, <var>p</var> + 1, where
+/// <var>p</var> &le; 30 is the widest significand a 32-bit shape holds.
+///
+/// Dropping such an addend is also what keeps the aligned sum inside an
+/// [`i64`]: the sum stays under 2<sup><var>p</var>+CAP</sup> once the cap is at
+/// least <var>p</var>, so the cap is at most 63 &minus; <var>p</var>.  The two
+/// bounds leave [31, 33] at <var>p</var> = 30, and 32 sits inside it.
+const ALIGN_CAP: i32 = 32;
 
 /// One addend at the common exponent, signed
 ///
@@ -128,7 +148,7 @@ const fn align(negative: bool, significand: u64, exponent: i32, base: i32) -> i6
 ///
 /// Each operand is `sign` &times; `significand` &times;
 /// 2<sup>`exponent`</sup>, and so is the result.  The caller is responsible
-/// for the significands fitting in 15 bits, which every minifloat does.
+/// for the significands fitting in 30 bits, which every minifloat does.
 #[must_use]
 #[inline]
 pub const fn add_parts(
@@ -154,20 +174,22 @@ pub const fn add_parts(
     )
 }
 
-/// Quotient bits computed below the dividend's own
-///
-/// A minifloat keeps at most 15 of them; the rest are the guard and sticky
-/// room every rounding needs.
-const QUOTIENT_BITS: u32 = 46;
-
 /// Quotient of two magnitudes, exact enough to round
 ///
 /// The remainder collapses into the lowest bit of the quotient, the sticky bit
-/// every divider keeps.  At these many quotient bits it never decides a
-/// rounding on its own &mdash; two fractions this short cannot straddle a
-/// midpoint that finely &mdash; but it is what leaves the bit count a matter
-/// of headroom instead of proof.  The caller is responsible for a nonzero
-/// divisor and for both significands fitting in 15 bits.
+/// every divider keeps.  What has to be shown is that enough quotient bits sit
+/// above it: rounding to <var>p</var> digits needs <var>p</var> + 2.
+///
+/// A fixed shift cannot deliver them.  A subnormal dividend &mdash; a
+/// significand as small as 1 &mdash; over a full-width divisor leaves only
+/// 63 &minus; 2<var>p</var> bits, which falls short once <var>p</var> &gt; 20.
+/// Normalising the dividend to bit 62 instead leaves at least 63 &minus;
+/// <var>p</var> whatever it was, and keeps the quotient under 2<sup>63</sup>
+/// because the divisor is at least 1.
+///
+/// The caller is responsible for a nonzero divisor, for both significands
+/// fitting in 30 bits &mdash; bit 63 of the dividend must be clear or the
+/// shift below underflows &mdash; and for reading the sticky bit as sticky.
 #[must_use]
 #[inline]
 pub const fn div_parts(
@@ -176,12 +198,15 @@ pub const fn div_parts(
     rhs_significand: u64,
     rhs_exponent: i32,
 ) -> (u64, i32) {
-    let numerator = significand << QUOTIENT_BITS;
+    // A zero dividend leaves a shift of 63 and a quotient of zero, which is
+    // the right answer for it.
+    let shift = significand.leading_zeros() - 1;
+    let numerator = significand << shift;
     let quotient = numerator / rhs_significand;
     let remainder = numerator % rhs_significand;
 
     (
         quotient | (remainder != 0) as u64,
-        exponent - rhs_exponent - QUOTIENT_BITS.cast_signed(),
+        exponent - rhs_exponent - shift.cast_signed(),
     )
 }
