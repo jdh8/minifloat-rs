@@ -64,7 +64,14 @@ Two distinct gates live in there, and it is worth not conflating them:
   in `i128` with no float involved;
 - **the `f32` round-trip sweep** (`test_arithmetic_matches_f32_16bit`) — all
   2<sup>32</sup> ordered pairs of `F16` and `BF16`, which is what licenses
-  `benches/arith.rs` to time the two routes against each other.
+  `benches/arith.rs` to time the two routes against each other;
+- **the hardware gate** (`test_f32_shape_matches_hardware`) — `E8M23` *is*
+  `f32`, so 2<sup>22</sup> pairs of it have to land on the FPU's own bits.  The
+  only arithmetic gate here with no Figueroa caveat.
+
+The wide roster (`support::test_wide_shapes`) is where the 16- and 32-bit shapes
+live, sampled rather than walked: `support::codes` is exhaustive through 20 bits
+and takes an odd stride above it.
 
 The non-finite pairs the oracle skips are pinned by
 `test_arithmetic_matches_f64`.  [docs/arithmetic.md](docs/arithmetic.md) has the

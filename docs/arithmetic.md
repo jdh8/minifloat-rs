@@ -13,21 +13,22 @@ an `f64`, though it represents both answers exactly (`test_arithmetic_past_f64`)
 
 The route now is `to_parts` → an exact integer computation → `from_parts`:
 
-- **multiply** — two significands of at most 15 bits multiply exactly in a
-  `u64`, exponents add.  Genuinely exact.
+- **multiply** — two significands of at most 30 bits make a 60-bit product,
+  which a `u64` holds exactly; exponents add.  Genuinely exact.
 - **add** — `add_parts` aligns both addends on the lower exponent and sums them
-  signed in an `i64`.  Addends more than `detail::ALIGN_CAP` = 46 binades apart
+  signed in an `i64`.  Addends more than `detail::ALIGN_CAP` = 32 binades apart
   drop the smaller one, which is under half the ULP of the larger and rounds
   straight back to it; that cap is also what keeps the aligned sum inside an
   `i64`.
-- **divide** — `div_parts` computes `detail::QUOTIENT_BITS` = 46 quotient bits
-  and folds the remainder into the lowest as a sticky bit.  The two 46s are
-  unrelated: one is an alignment window, the other a quotient width.
+- **divide** — `div_parts` normalises the dividend to bit 62, divides, and folds
+  the remainder into the lowest bit as a sticky one.  Normalising is what
+  guarantees the *p* + 2 quotient bits rounding needs; a fixed shift does not,
+  and the next section says why.
 
 So two of the four carry a deliberately inexact tail.  Neither tail can change
-a rounding — that is what the two constants are sized for — which is why the
-thesis says *exact enough to round* and `add_parts` and `div_parts` say the same
-in their own doc comments.
+a rounding — that is what the cap and the normalisation are sized for — which is
+why the thesis says *exact enough to round* and `add_parts` and `div_parts` say
+the same in their own doc comments.
 
 `from_parts` is the only place *arithmetic* rounds, ties to even, by way of
 `detail::round_to_scale`.  One rounding, so no intermediate can lose what the
@@ -42,6 +43,42 @@ The special cases stopped borrowing `f64`'s at the same time.  An invalid
 operation yields the format's NaN, or `MAX` where the format has none, rather
 than whatever sign the host's default NaN carried — `0 / 0` in a `Finite`
 format used to be &minus;`MAX` on x86 and +`MAX` on ARM.
+
+## The ceiling is 32 bits because the kernels are 64-bit
+
+`Minifloat::Bits` is `u8`, `u16` or `u32`, and the last of those is where it
+stops.  That is not a policy about how wide a minifloat ought to be: it is where
+the `u64` kernels above run out.  With `E` ≥ 2 in 32 bits, `M` ≤ 29 and the
+precision *p* = `M` + 1 ≤ 30, which every kernel has to survive.
+
+| kernel | requirement | at *p* = 30 |
+| --- | --- | --- |
+| `mul`: exact product in a `u64` | 2*p* ≤ 64 | 60 bits |
+| `add_parts`: a dropped far addend rounds back to the other | `ALIGN_CAP` ≥ *p* + 1 | 31 ≤ 32 |
+| `add_parts`: the aligned sum fits an `i64` | *p* + `ALIGN_CAP` ≤ 63 | 62 bits |
+| `div_parts`: *p* + 2 quotient bits to round with | dividend at bit 62 leaves ≥ 63 − *p* | 33 ≥ 32 |
+| `round_to_scale`: a shift ≥ 64 yielding 0 is exact | every significand handed in ≤ 2<sup>63</sup> | product < 2<sup>60</sup>, quotient < 2<sup>63</sup> |
+
+Any cap in [27, 37] passes every 32-bit shape, because no reachable shape makes
+the addition bounds tight at once: a gap past the cap needs `E` ≥ 6, which
+forces *p* ≤ 26.  `E2M29` has *p* = 30 but gaps of at most 2.  32 is what the
+two bounds leave at *p* = 30 itself.
+
+Division is the one that had to change rather than shrink.  A fixed quotient
+shift of 63 − *p* is not enough: a subnormal dividend — a significand as small
+as 1 — over a full-width divisor leaves only 63 − 2*p* quotient bits, below
+*p* + 2 once *p* > 20.  Normalising the dividend leaves at least 63 − *p*
+whatever it was.  Both facts are gated rather than argued: putting the fixed
+shift back fails `test_arithmetic_correctly_rounded_wide` at `E8M22`, one ULP
+out, and putting `ALIGN_CAP` back to 46 fails the same test where the aligned
+sum overflows.  Neither mutation is visible to any 16-bit shape.
+
+One thing the kernels do not bound is the exponent.  `integer_decode` returns an
+`i16`, so `__minifloat!` asserts that both ends of the ULP scale fit one —
+`MIN_EXP - MANTISSA_DIGITS ≥ i16::MIN` and `MAX_EXP - MANTISSA_DIGITS ≤
+i16::MAX`.  The condition is on the range and not on `E`, because a custom bias
+slides the range under any exponent width; with the default bias any `E` up to
+15 passes.  Every `i32` exponent sum an operator forms is then trivially safe.
 
 ## Why there is no hardware route left to choose
 
@@ -120,8 +157,22 @@ hand-written roster (`tests/all/support.rs`) of 34 declared types at widths 4, 6
 and 8, spanning all four formats and exponent widths 2 through 6.  Pairs
 involving an infinity or a NaN have no exact magnitude to compare against and
 return early; those are pinned by `test_arithmetic_matches_f64` instead.
-16-bit shapes are sampled at 2<sup>16</sup> pairs — 2<sup>13</sup> turned out to
-miss the double rounding an `f32` intermediate causes in `E2M13`.
+The wide roster — nine 16-bit shapes and six on `u32`, `BF20` among them — is
+sampled at 2<sup>16</sup> pairs, plus 2<sup>12</sup> whose left operand is
+subnormal, which is the case `div_parts` normalises for and which a uniform draw
+over a 32-bit shape practically never hits.  2<sup>13</sup> uniform pairs turned
+out to miss the double rounding an `f32` intermediate causes in `E2M13`, which
+is why the count is what it is.  Those shapes are sampled by *code* as well:
+above 20 bits `support::codes` walks an odd stride landing near a million, odd
+so every low-bit pattern and hence every tie parity is still visited.
+
+`E8M23` is the shape that needs no referee at all, because it *is* `f32`.
+`test_f32_shape_matches_hardware` runs 2<sup>22</sup> pairs of it through all
+four operators against the FPU's own bits — the sign of a zero, the ±∞ an
+overflow or a division by zero produces, and every subnormal result, with only
+the NaN payload exempt.  It is the one arithmetic gate in the suite with no
+Figueroa caveat attached, and `test_f32_shape_matches_core` pins the constants
+against `core::f32` the same way.
 
 The older `f64` and `f32` comparisons stay in the file on purpose.  They are
 narrower — they cannot referee a shape their float cannot hold — but they cover
