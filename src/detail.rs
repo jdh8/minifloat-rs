@@ -53,9 +53,12 @@ pub const fn decompose(x: f64) -> (u64, i32) {
 /// an integer significand keeps this exact for exponents far outside the range
 /// of any hardware float.
 ///
-/// The caller is responsible for the quotient fitting in an [`i64`]: every
-/// significand handed in here is at most 2<sup>63</sup>, so a shift that only
-/// ever narrows it has room to spare.
+/// The caller is responsible for the result fitting in an [`i64`], and the two
+/// branches earn that differently.  A shift that narrows needs only the bound
+/// on the way in: every significand handed here is at most 2<sup>63</sup>.  A
+/// shift that widens is the caller's own doing &mdash; `from_parts` shifts up
+/// only to put the significand's top bit where the format keeps it, so the
+/// result is under 2<sup><var>M</var>+1</sup>, at most 2<sup>30</sup>.
 #[must_use]
 #[inline]
 pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64 {
