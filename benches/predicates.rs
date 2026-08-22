@@ -15,7 +15,7 @@
 //! sides of an A/B build carry the same bench code.
 
 use criterion::{BenchmarkId, Criterion, Throughput};
-use minifloat::{Minifloat, BF16, F16, F8E4M3, F8E5M2FNUZ};
+use minifloat::{Minifloat, BF16, BF20, F16, F8E4M3, F8E5M2FNUZ};
 
 use core::hint::black_box;
 use core::time::Duration;
@@ -65,8 +65,9 @@ macro_rules! bench_shapes {
 
 fn bench_predicates(criterion: &mut Criterion) {
     // One shape per thing that can differ: a plain `IEEE` `u8`, the `FNUZ`
-    // whose NaN is a bare bit pattern, and both `u16` shapes.
-    bench_shapes! { criterion, F8E4M3 F8E5M2FNUZ F16 BF16 }
+    // whose NaN is a bare bit pattern, both `u16` shapes, and the one on
+    // `u32` storage.
+    bench_shapes! { criterion, F8E4M3 F8E5M2FNUZ F16 BF16 BF20 }
 }
 
 criterion::criterion_group! {

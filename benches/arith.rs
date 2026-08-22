@@ -17,8 +17,8 @@
 
 use criterion::{BenchmarkId, Criterion, Throughput};
 use minifloat::{
-    minifloat, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3, F8E4M3B11FNUZ,
-    F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
+    minifloat, Minifloat, BF16, BF20, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3,
+    F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
 };
 
 use core::hint::black_box;
@@ -125,7 +125,7 @@ fn bench_arithmetic(criterion: &mut Criterion) {
     bench_shapes! { criterion,
         F4E2M1FN F6E2M3FN F6E3M2FN
         F8E3M4 F8E4M3 F8E4M3FN F8E4M3FNUZ F8E4M3B11FNUZ F8E5M2 F8E5M2FNUZ
-        F16 BF16
+        F16 BF16 BF20
         E11M4 E2M13 E12M3
     }
 }

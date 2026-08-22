@@ -586,6 +586,9 @@ macro_rules! __minifloat {
             /// The maximum exponent
             ///
             /// Normal numbers < 1 &times; 2<sup>`MAX_EXP`</sup>.
+            // The exponent field is at most 16 bits wide, so it has nothing to
+            // wrap into on the way to an `i32`; `From` is not const.
+            #[allow(clippy::cast_possible_wrap)]
             pub const MAX_EXP: i32 = (Self::MAX.0 >> Self::M) as i32 - Self::B + 1;
 
             /// One greater than the minimum normal exponent
@@ -1392,9 +1395,13 @@ minifloat!(pub struct F8E5M2FNUZ(u8): 5, 2, FNUZ);
 minifloat!(pub struct F16(u16): 5, 10);
 minifloat!(pub struct BF16(u16): 8, 7);
 
+// The one predefined type outside LLVM's set: an `f32` with 11 fraction bits
+// kept, which is the accumulator width et-toolchain's C model works in.
+minifloat!(pub struct BF20(u32): 8, 11);
+
 // Every type above is narrow enough to be exact in both `f32` and `f64`.
 lossless! {
     F4E2M1FN F6E2M3FN F6E3M2FN
     F8E3M4 F8E4M3 F8E4M3FN F8E4M3FNUZ F8E4M3B11FNUZ F8E5M2 F8E5M2FNUZ
-    F16 BF16
+    F16 BF16 BF20
 }

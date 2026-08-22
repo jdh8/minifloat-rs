@@ -7,8 +7,8 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use minifloat::{
-    minifloat, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3,
-    F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
+    minifloat, Minifloat, BF16, BF20, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4,
+    F8E4M3, F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
 };
 
 use core::fmt::Debug;
@@ -202,6 +202,7 @@ pub(crate) fn test_most_8_bits<T: Check>(_: T) {
 /// | `12, 3` | exact in neither, default bias |
 /// | `12, 3, 1000` | exact in neither, custom bias |
 /// | `2, 13` | the widest mantissa a 16-bit shape can hold |
+/// | `BF20` | the predefined one; exact in `f32`, refereed by `f64` |
 /// | `8, 22` | the widest brain float short of `f32`, last E8 shape `f64` can referee |
 /// | `8, 23` | `f32`'s own shape: the FPU and `core::f32` referee it with no caveat |
 /// | `6, 25` | gaps past `ALIGN_CAP` with the widest significand that allows them |
@@ -224,6 +225,7 @@ pub(crate) fn test_wide_shapes<T: Check>(_: T) {
     minifloat!(struct E2M29(u32): 2, 29);
     minifloat!(struct E2M29FNUZ(u32): 2, 29, FNUZ);
 
+    assert!(T::check::<BF20>());
     assert!(T::check::<E8M22>());
     assert!(T::check::<E8M23>());
     assert!(T::check::<E6M25>());

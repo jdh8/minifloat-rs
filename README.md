@@ -67,8 +67,10 @@ kernels run out; `docs/arithmetic.md` has the arithmetic.
 
 ## Predefined types
 
-These are [LLVM's floating-point types][llvm] no wider than 16 bits.  All of
-them opt into the lossless `From` impls for `f32` and `f64`.
+These are [LLVM's floating-point types][llvm] no wider than 16 bits, plus
+`BF20`, the 20-bit brain float — an `f32` keeping 11 fraction bits — which is
+not in LLVM's set.  All of them opt into the lossless `From` impls for `f32`
+and `f64`.
 
 | Type              | Bits | E | M | Bias | Format   | Max         |
 | ----------------- | ---- | - | -- | ---- | -------- | ----------- |
@@ -84,6 +86,7 @@ them opt into the lossless `From` impls for `f32` and `f64`.
 | `F8E5M2FNUZ`      | 8    | 5 | 2  | 16   | `FNUZ`   | 57344       |
 | `F16`             | 16   | 5 | 10 | 15   | `IEEE`   | 65504       |
 | `BF16`            | 16   | 8 | 7  | 127  | `IEEE`   | 3.39 × 10<sup>38</sup> |
+| `BF20`            | 20   | 8 | 11 | 127  | `IEEE`   | 3.40 × 10<sup>38</sup> |
 
 **The suffix is a name, not the format.**  Following LLVM, the OCP MX types
 keep their historical `FN` suffix while carrying the `Finite` format, so

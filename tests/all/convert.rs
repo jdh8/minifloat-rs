@@ -8,8 +8,8 @@
 
 use crate::support::*;
 use minifloat::{
-    minifloat, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3,
-    F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
+    minifloat, Minifloat, BF16, BF20, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4,
+    F8E4M3, F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
 };
 
 use core::fmt::Debug;
@@ -82,6 +82,8 @@ fn test_has_exact_conversion_consts() {
     const _: () = assert!(F16::HAS_EXACT_F64_CONVERSION);
     const _: () = assert!(BF16::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(BF16::HAS_EXACT_F64_CONVERSION);
+    const _: () = assert!(BF20::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(BF20::HAS_EXACT_F64_CONVERSION);
     const _: () = assert!(F8E4M3FN::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(F8E4M3FN::HAS_EXACT_F64_CONVERSION);
 }
@@ -100,6 +102,7 @@ fn test_from_lossless() {
     }
     assert!(check::<F16>());
     assert!(check::<BF16>());
+    assert!(check::<BF20>());
     assert!(check::<F8E4M3FN>());
     assert!(check::<F8E5M2>());
     assert!(check::<F8E4M3FNUZ>());

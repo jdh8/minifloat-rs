@@ -8,8 +8,8 @@
 
 use crate::support::*;
 use minifloat::{
-    minifloat, Format, Minifloat, BF16, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4, F8E4M3,
-    F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
+    minifloat, Format, Minifloat, BF16, BF20, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4,
+    F8E4M3, F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
 };
 
 /// Textbook value of a bit pattern, computed from the raw fields
@@ -81,6 +81,7 @@ fn test_predefined_types_match_their_specification() {
     check_oracle::<F8E5M2FNUZ>(5, 2, 16, Format::FNUZ);
     check_oracle::<F16>(5, 10, 15, Format::IEEE);
     check_oracle::<BF16>(8, 7, 127, Format::IEEE);
+    check_oracle::<BF20>(8, 11, 127, Format::IEEE);
 }
 
 #[test]
@@ -124,6 +125,7 @@ fn test_max_10_exp() {
 
     const _: () = assert!(F16::MAX_10_EXP == 4);
     const _: () = assert!(BF16::MAX_10_EXP == 38);
+    const _: () = assert!(BF20::MAX_10_EXP == 38);
     const _: () = assert!(F8E4M3FN::MAX_10_EXP == 2);
     const _: () = assert!(F4E2M1FN::MAX_10_EXP == 0);
     const _: () = assert!(F6E3M2FN::MAX_10_EXP == 1);
@@ -140,9 +142,11 @@ fn test_decimal_digits() {
     // `BF16` has `f32`'s exponent range exactly, so the standard library
     // referees this one.
     const _: () = assert!(BF16::MIN_10_EXP == f32::MIN_10_EXP);
+    const _: () = assert!(BF20::MIN_10_EXP == f32::MIN_10_EXP);
 
     const _: () = assert!(F16::DIGITS == 3);
     const _: () = assert!(BF16::DIGITS == 2);
+    const _: () = assert!(BF20::DIGITS == 3);
     const _: () = assert!(F8E4M3FN::DIGITS == 0);
 
     const _: () = assert!(F16::MIN_10_EXP == -4);
