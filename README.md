@@ -61,7 +61,9 @@ encoding, and inherent `INFINITY` / `NEG_INFINITY` only if it has infinities.
 Generic code reaches them through [`Minifloat::NAN`] and
 [`Minifloat::INFINITY`], which are `Option`s.
 
-The total bit-width must be < 17 (16 magnitude bits plus a sign).
+The total bit-width must be ≤ 32 — a sign bit and up to 31 magnitude bits,
+backed by `u8`, `u16` or `u32`.  The ceiling is where the 64-bit integer
+kernels run out; `docs/arithmetic.md` has the arithmetic.
 
 ## Predefined types
 

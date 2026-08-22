@@ -20,6 +20,7 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for u8 {}
     impl Sealed for u16 {}
+    impl Sealed for u32 {}
 }
 
 /// Encoding format of a minifloat
@@ -119,10 +120,11 @@ pub trait Minifloat:
     + core::ops::Mul<Output = Self>
     + core::ops::Div<Output = Self>
 {
-    /// Storage type — either [`u8`] or [`u16`]
+    /// Storage type — [`u8`], [`u16`] or [`u32`]
     ///
-    /// A minifloat is a sign bit plus fewer than 16 magnitude bits, so no
-    /// wider integer can ever be the right storage.
+    /// A minifloat is at most 32 bits wide — the widest storage whose
+    /// significands the 64-bit kernels multiply and align exactly — so no
+    /// wider integer can be the right storage.
     type Bits: sealed::Sealed + Copy + Default + Eq + 'static;
 
     /// Exponent bit-width
@@ -433,7 +435,7 @@ macro_rules! impl_from_minifloat_for_f64 {
 /// Configure a (signed) minifloat
 ///
 /// * `$name`: name of the type
-/// * `$bits`: the underlying unsigned integer, usually [`u8`] or [`u16`]
+/// * `$bits`: the underlying unsigned integer, usually [`u8`], [`u16`] or [`u32`]
 /// * `$e`: exponent bit-width
 /// * `$m`: explicit significand (mantissa) bit-width
 /// * `$b`: exponent bias, which defaults to 2<sup>`$e`&minus;1</sup> &minus; 1
@@ -451,9 +453,11 @@ macro_rules! impl_from_minifloat_for_f64 {
 ///
 /// ## Constraints
 ///
-/// * `$e` + `$m` < 16 (there is always a sign bit)
+/// * `$e` + `$m` < 32 (there is always a sign bit)
 /// * `$e` ≥ 2 (or use an integer type instead)
 /// * `$m` > 0 if `$n` is `IEEE` (∞ ≠ NaN)
+/// * the exponent range must fit [`integer_decode`][Minifloat::integer_decode]'s
+///   [`i16`] — with the default bias, any `$e` ≤ 15 does
 ///
 /// ## Example
 ///
@@ -517,6 +521,16 @@ macro_rules! __minifloat {
     ($vis:vis struct $name:ident($bits:ty): $e:expr, $m:expr, $b:expr, $format:ident) => {
         const _: () = assert!($name::BITWIDTH <= <$bits>::BITS);
         const _: () = assert!($name::E >= 2);
+        // `integer_decode` returns an `i16` exponent, so both ends of the ULP
+        // scale have to fit one.  The condition is on the range and not on
+        // `E`, because a custom bias slides the range under any exponent
+        // width; with the default bias any `E` up to 15 passes.  It also
+        // bounds every `i32` exponent sum an operator forms.  `From` is not
+        // const, hence the widening `as`.
+        const _: () =
+            assert!($name::MIN_EXP - $name::MANTISSA_DIGITS.cast_signed() >= i16::MIN as i32);
+        const _: () =
+            assert!($name::MAX_EXP - $name::MANTISSA_DIGITS.cast_signed() <= i16::MAX as i32);
         const _: () = assert!($name::M > 0 || !$name::HAS_INF);
         const _: () = assert!($name::MAX_EXP >= 1);
         const _: () = assert!($name::MIN_EXP <= 1);
@@ -795,8 +809,8 @@ macro_rules! __minifloat {
             /// always have `sign` equal to ±1, so `sign == 0` unambiguously
             /// identifies NaN.
             #[must_use]
-            // The exponent field is at most 8 bits wide and debiasing it
-            // leaves a minifloat exponent.  `TryFrom` is not const.
+            // The debiased exponent fits an `i16`; the assert beside
+            // `E >= 2` is what holds that.  `TryFrom` is not const.
             #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub const fn integer_decode(self) -> (u64, i16, i8) {
@@ -1049,7 +1063,7 @@ macro_rules! __minifloat {
                 } else {
                     (
                         (magnitude & ((1 << Self::M) - 1)) | 1 << Self::M,
-                        i32::from(field) - Self::B - Self::M.cast_signed(),
+                        i32::from(field.cast_signed()) - Self::B - Self::M.cast_signed(),
                     )
                 };
 
@@ -1076,23 +1090,27 @@ macro_rules! __minifloat {
 
                 if Self::HAS_EXACT_F32_CONVERSION {
                     // Same reassembly as `to_f64`, one size down; see there for
-                    // why nothing rounds and nothing can fail for a shape that
-                    // skips this.
+                    // why nothing rounds.  The shift saturates so it stays
+                    // total for the wider shapes, whose `MANTISSA_DIGITS`
+                    // overruns `f32`'s and which never reach this branch.
                     if self.is_infinite() {
                         return f32::INFINITY * sign;
                     }
                     let magnitude = self.to_bits() & Self::ABS_MASK;
                     if magnitude >> Self::M == 0 {
-                        // The scale of a shape that fits in `f32` is exact in
-                        // `f32`; the cast only drops `f64`'s spare exponent room.
-                        #[allow(clippy::cast_possible_truncation)]
+                        // Scaling in `f64` is what spares this branch a
+                        // `f32::from`, which `u32` storage does not have.  The
+                        // product is an `f32` value, so the cast rounds
+                        // nothing; that is what `HAS_EXACT_F32_CONVERSION`
+                        // guarantees.
                         let scale = $crate::detail::exp2i(
                             Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed(),
-                        ) as f32;
-                        return f32::from(magnitude) * scale.copysign(sign);
+                        );
+                        #[allow(clippy::cast_possible_truncation)]
+                        return (f64::from(magnitude) * scale.copysign(f64::from(sign))) as f32;
                     }
-                    let shifted =
-                        u32::from(magnitude) << (f32::MANTISSA_DIGITS - Self::MANTISSA_DIGITS);
+                    let shifted = u32::from(magnitude)
+                        << f32::MANTISSA_DIGITS.saturating_sub(Self::MANTISSA_DIGITS);
                     let rebias =
                         ((Self::MIN_EXP - f32::MIN_EXP) as u32) << (f32::MANTISSA_DIGITS - 1);
                     let sign_bit = u32::from(self.is_sign_negative()) << (u32::BITS - 1);
@@ -1193,7 +1211,8 @@ macro_rules! __minifloat {
                     let zero = significand == 0 || rhs_significand == 0;
                     return if zero { Self::INVALID } else { Self::huge(negative) };
                 }
-                // Two significands of at most 15 bits multiply exactly.
+                // Two significands of at most 30 bits make a 60-bit product,
+                // which a `u64` holds exactly.
                 Self::from_parts(negative, significand * rhs_significand, exponent + rhs_exponent)
             }
         }
