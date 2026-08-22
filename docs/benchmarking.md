@@ -148,7 +148,9 @@ this change's band.  A null recorded is still worth more than a null dressed up.
   which have no alternative route and exist to watch whether the bodies reach
   the caller at all.
 
-Both run a deliberately short criterion window — 200 ms warm-up, 1 s
+Both draw their operands from `benches/common/mod.rs`, so an A/B build differs
+in the crate under test and never in the inputs.  Both run a deliberately short
+criterion window — 200 ms warm-up, 1 s
 measurement, against criterion's 3 s and 5 s defaults.  Each iteration already
 averages 1024 operations, so the estimate settles well inside that; the defaults
 would turn 112 benchmarks into a quarter-hour run for no extra resolution.  It
@@ -246,16 +248,12 @@ that first optimizes a converter, not before.
 When that round comes, the shape to copy is the Rust sibling,
 [`jdh8/metallic-rs`](https://github.com/jdh8/metallic-rs): one bench file per
 function over a shared harness, the competing implementations as sibling
-criterion rows *in the same binary* &mdash; which is what `benches/arith.rs`
-already does with its soft and hardware arms &mdash; and the input distribution
-declared by the range form instead of left implicit.  Its publishing mechanism
-has already been copied, minus its fan-out, by the section above, so the
-reference is no longer only about file layout.  Its test side settles the
-budget question that route will raise: a plain sequential traversal of all
-2<sup>32</sup> `f32` bit patterns is routine practice there, so an exhaustive
-sweep is affordable when an exhaustive sweep is what licenses the route.
-`tests/all/ops.rs` now leans on the same fact &mdash; all 2<sup>32</sup> ordered
-pairs of `F16` and `BF16` through `partial_cmp` and `total_cmp` cost 2.5 s of
-the suite's 19 s, striped over the 32 threads of a Ryzen 9 7950X3D on
+criterion rows *in the same binary*, and the input distribution declared rather
+than left implicit.
+
+The budget it will raise is already settled, so do not re-argue it.  An
+exhaustive sweep is affordable: all 2<sup>32</sup> ordered pairs of `F16` and
+`BF16` through `partial_cmp` and `total_cmp` cost 2.5 s of the suite's 19 s in
+`tests/all/ops.rs`, striped over the 32 threads of a Ryzen 9 7950X3D on
 2026-08-21 &mdash; not the box in this file's header, which is why the machine
-is named here.
+is named.

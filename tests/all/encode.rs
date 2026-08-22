@@ -7,30 +7,10 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::support::*;
-use minifloat::{Format, Minifloat};
+use minifloat::{detail::decompose, Format, Minifloat};
 
 use core::cmp::Ordering;
 use core::fmt::Debug;
-
-/// Decompose a finite [`f64`] into an exact `(significand, exponent)` pair
-///
-/// The value is `significand` &times; 2<sup>`exponent`</sup> with no hidden
-/// bits, so the pair can be compared and scaled without rounding.  The sign is
-/// dropped; callers pass a magnitude.
-pub(crate) fn decompose(x: f64) -> (u64, i32) {
-    let bits = x.to_bits();
-    let field = (bits >> (f64::MANTISSA_DIGITS - 1)) as i32;
-    let fraction = bits & bit_mask(f64::MANTISSA_DIGITS - 1);
-
-    if field == 0 {
-        (fraction, f64::MIN_EXP - f64::MANTISSA_DIGITS.cast_signed())
-    } else {
-        (
-            fraction | 1 << (f64::MANTISSA_DIGITS - 1),
-            field + f64::MIN_EXP - 1 - f64::MANTISSA_DIGITS.cast_signed(),
-        )
-    }
-}
 
 /// Compare two non-negative `significand` &times; 2<sup>`exponent`</sup> pairs
 ///
@@ -143,9 +123,14 @@ where
 /// Correctly rounded encoding of `x`, derived from the format alone
 ///
 /// The crate encodes by shifting exponent fields around; this one brackets `x`
-/// between two neighbouring codes and picks the nearer, so the two share no
-/// arithmetic.  Ties go to the even code, overflow to `HUGE`, and a NaN to the
-/// format's NaN pattern (or to &plusmn;`MAX` where the format has none).
+/// between two neighbouring codes and picks the nearer, so the *rounding*
+/// shares nothing.  Reading the `f64` apart is not part of that: both sides
+/// call `detail::decompose`, because an exact split of an `f64` has one right
+/// answer, and the copy that used to live here was a copy rather than a second
+/// opinion — it would have been wrong in step.  The integer oracle in
+/// `arith.rs` is where independence is load-bearing, and it never touches an
+/// `f64` at all.  Ties go to the even code, overflow to `HUGE`, and a NaN to
+/// the format's NaN pattern (or to &plusmn;`MAX` where the format has none).
 pub(crate) fn reference_encode<T: Minifloat>(x: f64) -> T
 where
     T::Bits: TryFrom<Mask>,

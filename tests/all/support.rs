@@ -95,7 +95,42 @@ pub(crate) trait Check {
         T::Bits: TryFrom<Mask>;
 }
 
-fn test_8_bits<T: Check>(_: T) {
+/// Every shape in the roster narrower than 16 bits
+///
+/// The 4- and 6-bit shapes first, then the 8-bit ones.  A caller that wants
+/// only the wide shapes calls [`test_16_bits`] instead; every caller that
+/// wants the narrow ones wants all of them.
+pub(crate) fn test_most_8_bits<T: Check>(_: T) {
+    minifloat!(struct F6E2M3(u8): 2, 3);
+    minifloat!(struct F6E2M3FNUZ(u8): 2, 3, FNUZ);
+
+    minifloat!(struct F6E3M2(u8): 3, 2);
+    minifloat!(struct F6E3M2FNUZ(u8): 3, 2, FNUZ);
+
+    minifloat!(struct F4E2M1(u8): 2, 1);
+    minifloat!(struct F4E2M1FNUZ(u8): 2, 1, FNUZ);
+
+    // The crate's MX types carry the `Finite` format despite their `FN` names,
+    // so these cover the `FN` format at the same shapes.
+    minifloat!(struct E2M3FN(u8): 2, 3, FN);
+    minifloat!(struct E3M2FN(u8): 3, 2, FN);
+    minifloat!(struct E2M1FN(u8): 2, 1, FN);
+
+    assert!(T::check::<F6E2M3>());
+    assert!(T::check::<F6E2M3FN>());
+    assert!(T::check::<F6E2M3FNUZ>());
+    assert!(T::check::<E2M3FN>());
+
+    assert!(T::check::<F6E3M2>());
+    assert!(T::check::<F6E3M2FN>());
+    assert!(T::check::<F6E3M2FNUZ>());
+    assert!(T::check::<E3M2FN>());
+
+    assert!(T::check::<F4E2M1>());
+    assert!(T::check::<F4E2M1FN>());
+    assert!(T::check::<F4E2M1FNUZ>());
+    assert!(T::check::<E2M1FN>());
+
     minifloat!(struct F8E2M5(u8): 2, 5);
     minifloat!(struct F8E2M5FN(u8): 2, 5, FN);
     minifloat!(struct F8E2M5FNUZ(u8): 2, 5, FNUZ);
@@ -143,40 +178,6 @@ fn test_8_bits<T: Check>(_: T) {
     assert!(T::check::<F8E6M1FN>());
     assert!(T::check::<F8E6M1FNUZ>());
     assert!(T::check::<F8E6M1Finite>());
-}
-
-pub(crate) fn test_most_8_bits<T: Check>(x: T) {
-    minifloat!(struct F6E2M3(u8): 2, 3);
-    minifloat!(struct F6E2M3FNUZ(u8): 2, 3, FNUZ);
-
-    minifloat!(struct F6E3M2(u8): 3, 2);
-    minifloat!(struct F6E3M2FNUZ(u8): 3, 2, FNUZ);
-
-    minifloat!(struct F4E2M1(u8): 2, 1);
-    minifloat!(struct F4E2M1FNUZ(u8): 2, 1, FNUZ);
-
-    // The crate's MX types carry the `Finite` format despite their `FN` names,
-    // so these cover the `FN` format at the same shapes.
-    minifloat!(struct E2M3FN(u8): 2, 3, FN);
-    minifloat!(struct E3M2FN(u8): 3, 2, FN);
-    minifloat!(struct E2M1FN(u8): 2, 1, FN);
-
-    assert!(T::check::<F6E2M3>());
-    assert!(T::check::<F6E2M3FN>());
-    assert!(T::check::<F6E2M3FNUZ>());
-    assert!(T::check::<E2M3FN>());
-
-    assert!(T::check::<F6E3M2>());
-    assert!(T::check::<F6E3M2FN>());
-    assert!(T::check::<F6E3M2FNUZ>());
-    assert!(T::check::<E3M2FN>());
-
-    assert!(T::check::<F4E2M1>());
-    assert!(T::check::<F4E2M1FN>());
-    assert!(T::check::<F4E2M1FNUZ>());
-    assert!(T::check::<E2M1FN>());
-
-    test_8_bits(x);
 }
 
 /// Wide shapes reaching the conversion paths no 8-bit shape can
