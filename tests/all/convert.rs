@@ -35,7 +35,7 @@ fn test_to_f32() {
         }
     }
     test_most_8_bits(CheckToF32);
-    test_16_bits(CheckToF32);
+    test_wide_shapes(CheckToF32);
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn test_to_f64() {
         }
     }
     test_most_8_bits(CheckToF64);
-    test_16_bits(CheckToF64);
+    test_wide_shapes(CheckToF64);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn test_to_floats() {
         }
     }
     test_most_8_bits(CheckToFloats);
-    test_16_bits(CheckToFloats);
+    test_wide_shapes(CheckToFloats);
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn test_integer_decode_reconstruction() {
         }
     }
     test_most_8_bits(CheckIntegerDecode);
-    test_16_bits(CheckIntegerDecode);
+    test_wide_shapes(CheckIntegerDecode);
 }
 
 /// The wide shapes where the exactness constants must flip
@@ -152,6 +152,17 @@ fn test_has_exact_conversion_consts_wide() {
     minifloat!(struct E11M4(u16): 11, 4);
     minifloat!(struct E12M3(u16): 12, 3);
     minifloat!(struct E2M13(u16): 2, 13);
+    minifloat!(struct E8M23(u32): 8, 23);
+    minifloat!(struct E6M25(u32): 6, 25);
+    minifloat!(struct E2M29(u32): 2, 29);
+
+    // `E8M23` is `f32` exactly; one more mantissa bit is one too many.
+    const _: () = assert!(E8M23::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(E8M23::HAS_EXACT_F64_CONVERSION);
+    const _: () = assert!(!E6M25::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(E6M25::HAS_EXACT_F64_CONVERSION);
+    const _: () = assert!(!E2M29::HAS_EXACT_F32_CONVERSION);
+    const _: () = assert!(E2M29::HAS_EXACT_F64_CONVERSION);
 
     const _: () = assert!(!E11M4::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(E11M4::HAS_EXACT_F64_CONVERSION);

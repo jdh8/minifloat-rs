@@ -32,7 +32,7 @@ pub(crate) const fn bit_mask(width: u32) -> Mask {
 
 /// Narrow a bit pattern to a minifloat's storage
 ///
-/// A minifloat is at most 16 bits wide, so the conversion always succeeds.
+/// A minifloat is at most 32 bits wide, so the conversion always succeeds.
 pub(crate) fn narrow<T: Minifloat>(bits: Mask) -> T::Bits
 where
     T::Bits: TryFrom<Mask>,
@@ -41,6 +41,20 @@ where
         Ok(narrowed) => narrowed,
         Err(_) => unreachable!("a minifloat is narrower than its storage"),
     }
+}
+
+/// Stride that keeps a sweep of `T`'s bit patterns near a million
+///
+/// Exhaustive through 20 bits, where a shape has a million codes or fewer.
+/// Above that the stride is odd, so a sweep still visits every low-bit
+/// pattern and hence every tie parity.
+pub(crate) fn code_stride<T: Minifloat>() -> usize {
+    (1usize << T::BITWIDTH.saturating_sub(20)) | 1
+}
+
+/// Every bit pattern of `T`, sampled at [`code_stride`]
+pub(crate) fn codes<T: Minifloat>() -> impl Iterator<Item = Mask> {
+    (0..=bit_mask(T::BITWIDTH)).step_by(code_stride::<T>())
 }
 
 /// Test floating-point identity like Object.is in JavaScript
@@ -81,7 +95,7 @@ pub(crate) fn for_all<T: Minifloat>(f: impl Fn(T) -> bool) -> bool
 where
     T::Bits: TryFrom<Mask>,
 {
-    (0..=bit_mask(T::BITWIDTH)).all(|bits| f(T::from_bits(narrow::<T>(bits))))
+    codes::<T>().all(|bits| f(T::from_bits(narrow::<T>(bits))))
 }
 
 /// Wrapper trait for checking properties of minifloats
@@ -98,7 +112,7 @@ pub(crate) trait Check {
 /// Every shape in the roster narrower than 16 bits
 ///
 /// The 4- and 6-bit shapes first, then the 8-bit ones.  A caller that wants
-/// only the wide shapes calls [`test_16_bits`] instead; every caller that
+/// only the wide shapes calls [`test_wide_shapes`] instead; every caller that
 /// wants the narrow ones wants all of them.
 pub(crate) fn test_most_8_bits<T: Check>(_: T) {
     minifloat!(struct F6E2M3(u8): 2, 3);
@@ -188,7 +202,14 @@ pub(crate) fn test_most_8_bits<T: Check>(_: T) {
 /// | `12, 3` | exact in neither, default bias |
 /// | `12, 3, 1000` | exact in neither, custom bias |
 /// | `2, 13` | the widest mantissa a 16-bit shape can hold |
-pub(crate) fn test_16_bits<T: Check>(_: T) {
+/// | `8, 22` | the widest brain float short of `f32`, last E8 shape `f64` can referee |
+/// | `8, 23` | `f32`'s own shape: the FPU and `core::f32` referee it with no caveat |
+/// | `6, 25` | gaps past `ALIGN_CAP` with the widest significand that allows them |
+/// | `2, 29` | the widest mantissa a 32-bit shape holds, p = 30 |
+/// | `2, 29, FNUZ` | a non-IEEE format through the `u32` arms |
+///
+/// The 32-bit shapes are sampled rather than walked; [`codes`] says how.
+pub(crate) fn test_wide_shapes<T: Check>(_: T) {
     minifloat!(struct E11M4(u16): 11, 4);
     minifloat!(struct E12M3(u16): 12, 3);
     minifloat!(struct E12M3B1000(u16): 12, 3, (1000), IEEE);
@@ -196,6 +217,18 @@ pub(crate) fn test_16_bits<T: Check>(_: T) {
     minifloat!(struct E12M3FNUZ(u16): 12, 3, FNUZ);
     minifloat!(struct E12M3Finite(u16): 12, 3, Finite);
     minifloat!(struct E2M13(u16): 2, 13);
+
+    minifloat!(struct E8M22(u32): 8, 22);
+    minifloat!(struct E8M23(u32): 8, 23);
+    minifloat!(struct E6M25(u32): 6, 25);
+    minifloat!(struct E2M29(u32): 2, 29);
+    minifloat!(struct E2M29FNUZ(u32): 2, 29, FNUZ);
+
+    assert!(T::check::<E8M22>());
+    assert!(T::check::<E8M23>());
+    assert!(T::check::<E6M25>());
+    assert!(T::check::<E2M29>());
+    assert!(T::check::<E2M29FNUZ>());
 
     assert!(T::check::<E11M4>());
     assert!(T::check::<E12M3>());

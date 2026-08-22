@@ -67,7 +67,7 @@ fn test_eq() {
         }
     }
     test_most_8_bits(CheckEq);
-    test_16_bits(CheckEq);
+    test_wide_shapes(CheckEq);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn test_neg() {
         }
     }
     test_most_8_bits(CheckNeg);
-    test_16_bits(CheckNeg);
+    test_wide_shapes(CheckNeg);
 }
 
 #[test]
@@ -251,7 +251,7 @@ fn test_classify() {
         }
     }
     test_most_8_bits(CheckClassify);
-    test_16_bits(CheckClassify);
+    test_wide_shapes(CheckClassify);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn test_sign_and_abs() {
         where
             T::Bits: TryFrom<Mask>,
         {
-            (0..=bit_mask(T::BITWIDTH)).all(|bits| {
+            codes::<T>().all(|bits| {
                 let x = T::from_bits(narrow::<T>(bits));
                 let negative = bits >> (T::BITWIDTH - 1) != 0;
                 assert_eq!(x.is_sign_negative(), negative, "{x:?}");
@@ -287,7 +287,7 @@ fn test_sign_and_abs() {
         }
     }
     test_most_8_bits(CheckSign);
-    test_16_bits(CheckSign);
+    test_wide_shapes(CheckSign);
 }
 
 #[test]

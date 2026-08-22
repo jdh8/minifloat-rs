@@ -57,7 +57,7 @@ where
     assert_eq!(T::INFINITY.is_some(), format == Format::IEEE);
     assert_eq!(T::HAS_NEG_ZERO, format != Format::FNUZ);
 
-    for bits in 0..=bit_mask(T::BITWIDTH) {
+    for bits in codes::<T>() {
         let expected = oracle(bits, e_width, m_width, bias, format);
         let actual = T::from_bits(narrow::<T>(bits)).to_f64();
         assert!(
@@ -154,8 +154,47 @@ fn test_decimal_digits() {
     const _: () = assert!(F16::MIN_10_EXP == <F16 as Minifloat>::MIN_10_EXP);
 }
 
+/// `E8M23` is `f32`, so `core` referees it constant for constant
+///
+/// Every other shape is checked against a restatement of the format; this one
+/// is checked against the standard library's own answer, which nothing in this
+/// repository wrote.
+#[test]
+fn test_f32_shape_matches_core() {
+    minifloat!(struct E8M23(u32): 8, 23);
+
+    const _: () = assert!(E8M23::MAX_EXP == f32::MAX_EXP);
+    const _: () = assert!(E8M23::MIN_EXP == f32::MIN_EXP);
+    const _: () = assert!(E8M23::MAX_10_EXP == f32::MAX_10_EXP);
+    const _: () = assert!(E8M23::MIN_10_EXP == f32::MIN_10_EXP);
+    const _: () = assert!(E8M23::DIGITS == f32::DIGITS);
+    const _: () = assert!(E8M23::MANTISSA_DIGITS == f32::MANTISSA_DIGITS);
+
+    // The layouts coincide bit for bit, so the encodings compare directly.
+    assert_eq!(E8M23::MAX.to_bits(), f32::MAX.to_bits());
+    assert_eq!(E8M23::MIN.to_bits(), f32::MIN.to_bits());
+    assert_eq!(E8M23::MIN_POSITIVE.to_bits(), f32::MIN_POSITIVE.to_bits());
+    assert_eq!(E8M23::EPSILON.to_bits(), f32::EPSILON.to_bits());
+    assert_eq!(E8M23::TINY.to_bits(), f32::from_bits(1).to_bits());
+    assert_eq!(E8M23::NAN.to_bits(), f32::NAN.to_bits());
+    assert_eq!(E8M23::INFINITY.to_bits(), f32::INFINITY.to_bits());
+    assert_eq!(E8M23::NEG_INFINITY.to_bits(), f32::NEG_INFINITY.to_bits());
+}
+
 #[test]
 fn test_wide_shapes_match_their_specification() {
+    minifloat!(struct E8M22(u32): 8, 22);
+    minifloat!(struct E8M23(u32): 8, 23);
+    minifloat!(struct E6M25(u32): 6, 25);
+    minifloat!(struct E2M29(u32): 2, 29);
+    minifloat!(struct E2M29FNUZ(u32): 2, 29, FNUZ);
+
+    check_oracle::<E8M22>(8, 22, 127, Format::IEEE);
+    check_oracle::<E8M23>(8, 23, 127, Format::IEEE);
+    check_oracle::<E6M25>(6, 25, 31, Format::IEEE);
+    check_oracle::<E2M29>(2, 29, 1, Format::IEEE);
+    check_oracle::<E2M29FNUZ>(2, 29, 2, Format::FNUZ);
+
     minifloat!(struct E11M4(u16): 11, 4);
     minifloat!(struct E12M3(u16): 12, 3);
     minifloat!(struct E12M3B1000(u16): 12, 3, (1000), IEEE);

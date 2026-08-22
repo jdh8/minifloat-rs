@@ -160,17 +160,23 @@ fn test_compound_assignment() {
     assert_eq!(x.to_f64(), 1.5);
 }
 
+/// The wide roster against an `f64` round trip, wherever `f64` may referee
+///
+/// The rule is `route`'s, not just exactness: an `f64` intermediate needs
+/// 2<var>p</var> + 2 digits or the `f64` operation double-rounds where the
+/// shape does not (Figueroa 1995).  `E6M25` and `E2M29` fail that and are left
+/// to the exact oracle below, which needs no referee at all.
 #[test]
-fn test_arithmetic_16bit_sampled() {
+fn test_arithmetic_wide_sampled() {
     struct CheckArith16;
     impl Check for CheckArith16 {
         fn check<T: Minifloat + Debug>() -> bool
         where
             T::Bits: TryFrom<Mask>,
         {
-            // `f64` cannot referee a shape it cannot even hold; the exact
-            // oracle in `test_arithmetic_correctly_rounded_16bit` does.
-            if !T::HAS_EXACT_F64_CONVERSION {
+            if !T::HAS_EXACT_F64_CONVERSION
+                || 2 * T::MANTISSA_DIGITS + 2 > f64::MANTISSA_DIGITS
+            {
                 return true;
             }
             let mut lcg = Lcg::new(0x0FED_CBA9_8765_4321);
@@ -202,7 +208,7 @@ fn test_arithmetic_16bit_sampled() {
             true
         }
     }
-    test_16_bits(CheckArith16);
+    test_wide_shapes(CheckArith16);
 }
 
 /// An exact arithmetic result, as a signed ratio
@@ -229,8 +235,9 @@ fn cmp_exact(exact: &Exact, (significand, exponent): (u64, i32)) -> Ordering {
 /// Widest exponent gap an aligned sum spans
 ///
 /// Two addends further apart than this cannot both matter.  The smaller one is
-/// then more than 49 binades below the nearest midpoint of the larger, so a
-/// single unit in the last place stands in for it: still nonzero, so it breaks
+/// then more than 33 binades below the nearest midpoint of the larger even at
+/// the widest shape, so a single unit in the last place stands in for it:
+/// still nonzero, so it breaks
 /// an exact tie the same way, yet far too small to move any other comparison.
 /// Capping the gap is what keeps the aligned sum inside an [`i128`].
 const ALIGN_CAP: i32 = 64;
@@ -353,7 +360,7 @@ fn test_arithmetic_correctly_rounded() {
 }
 
 #[test]
-fn test_arithmetic_correctly_rounded_16bit() {
+fn test_arithmetic_correctly_rounded_wide() {
     struct CheckExact16;
     impl Check for CheckExact16 {
         fn check<T: Minifloat + Debug>() -> bool
@@ -366,10 +373,51 @@ fn test_arithmetic_correctly_rounded_16bit() {
             for _ in 0..1 << 16 {
                 check_pair::<T>(draw(), draw());
             }
+            // A subnormal dividend is the case `div_parts` normalises for, and
+            // a uniform draw over a wide shape practically never lands on one.
+            for _ in 0..1 << 12 {
+                let sign = draw() & 1 << (T::E + T::M);
+                let subnormal = draw() & bit_mask(T::M);
+                check_pair::<T>(sign | subnormal, draw());
+            }
             true
         }
     }
-    test_16_bits(CheckExact16);
+    test_wide_shapes(CheckExact16);
+}
+
+/// `E8M23` *is* `f32`, so the FPU is not a stand-in for it
+///
+/// Every other comparison in this file carries the 2<var>p</var> + 2 caveat,
+/// because a hardware float is standing in for a narrower shape.  Here the
+/// shape and the hardware are the same format, so the operators owe the FPU's
+/// own bits: the sign of a zero, the ±∞ an overflow or a division by zero
+/// produces, and every subnormal result.  Only the NaN payload is exempt,
+/// which `same_mini` already equates.
+#[test]
+fn test_f32_shape_matches_hardware() {
+    minifloat!(struct E8M23(u32): 8, 23);
+
+    let mut lcg = Lcg::new(0x2468_ACE0_1357_9BDF);
+    let mut draw = || E8M23::from_bits(lcg.next());
+
+    for _ in 0..1 << 22 {
+        let (x, y) = (draw(), draw());
+        let (xf, yf) = (x.to_f32(), y.to_f32());
+
+        for (op, actual, hardware) in [
+            ('+', x + y, xf + yf),
+            ('-', x - y, xf - yf),
+            ('*', x * y, xf * yf),
+            ('/', x / y, xf / yf),
+        ] {
+            let expected = E8M23::from_bits(hardware.to_bits());
+            assert!(
+                same_mini(actual, expected),
+                "{x:?} {op} {y:?}: got {actual:?}, expected {expected:?}"
+            );
+        }
+    }
 }
 
 #[test]

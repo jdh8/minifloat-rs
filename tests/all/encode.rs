@@ -178,7 +178,8 @@ fn rounding_inputs<T: Minifloat>() -> Vec<f64> {
         -f64::from_bits(1),
     ];
 
-    for code in 0..=max + 1 {
+    // Unstrided, a 32-bit shape would build a 128 GiB `Vec`; see [`codes`].
+    for code in (0..=max + 1).step_by(code_stride::<T>()) {
         let (significand, exponent) = code_value::<T>(code);
         #[allow(clippy::cast_precision_loss)]
         let value = scaled(significand as f64, exponent);
@@ -225,7 +226,7 @@ fn test_encode_correct_rounding() {
         }
     }
     test_most_8_bits(CheckEncode);
-    test_16_bits(CheckEncode);
+    test_wide_shapes(CheckEncode);
 }
 
 #[test]
@@ -255,5 +256,5 @@ fn test_encode_random_sweep() {
         }
     }
     test_most_8_bits(CheckSweep);
-    test_16_bits(CheckSweep);
+    test_wide_shapes(CheckSweep);
 }
