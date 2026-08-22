@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `F8E4M3`, `F8E4M3FN`, `F8E4M3FNUZ`, `F8E4M3B11FNUZ`, `F8E5M2`, `F8E5M2FNUZ`,
   alongside the existing `F16` and `BF16`.
 - Inherent `HAS_INF`, `HAS_NAN`, and `HAS_NEG_ZERO` constants on every generated
-  type, plus an inherent `MAX_10_EXP`.
+  type, plus inherent `MAX_10_EXP`, `MIN_10_EXP`, and `DIGITS`.  Every constant
+  mirroring one of `f32`'s is now reachable on a concrete type without importing
+  `Minifloat`; `DIGITS` and `MIN_10_EXP` were the last two that were not.
 - `Minifloat::INFINITY` and `Minifloat::HAS_NEG_ZERO`.  Generic code could not
   reach an infinity at all before.
 - The public `Format` enum, an inherent `FORMAT` constant on every generated
@@ -34,7 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A second `cargo bench` target, `predicates`, timing `is_nan`, `classify`,
   `partial_cmp` and `total_cmp`.  These have no alternative route to be
   compared against; the target exists so an inlining sweep can be measured with
-  identical bench code on both sides.
+  identical bench code on both sides.  Both targets draw their operands from one
+  shared module, so an A/B build differs in the crate under test and never in
+  the inputs.
 - `docs/`, three standing references that outlive the commits they came from:
   `arithmetic.md` on why every operator rounds once on integer significands and
   what the oracle actually covers, `inlining.md` on what a dependent crate gets
@@ -63,6 +67,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an `FNUZ` NaN &mdash; which occupies the &minus;0 slot &mdash; orders between
   the negative numbers and +0 rather than beyond ±`MAX`.  Behaviour is
   unchanged; the new sweep pins it.
+- `DIGITS` and `MIN_10_EXP` are checked.  They were the only constants in the
+  crate with no caller anywhere in the suite, which followed from being the only
+  two the macro did not re-export inherently: nothing had the spelling
+  everything else uses.  Both are float math truncated to an integer, and the
+  truncation is what has to be right &mdash; `floor` for `DIGITS` and `ceil` for
+  `MIN_10_EXP`, which toward zero happens to be for both.  `BF16` carries
+  `f32`'s exponent range exactly, so the standard library referees its
+  `MIN_10_EXP` rather than a value written down by hand.
+- The reference encoder no longer keeps its own copy of the crate's `f64` split.
+  `tests/all/encode.rs` had a `decompose` differing from `detail::decompose` in
+  two tokens, so a fault in one would have been a fault in both and
+  `test_encode_correct_rounding` would still have passed &mdash; a copy rather
+  than a second opinion.  It calls the crate's outright now.  The independence
+  that is load-bearing is unaffected: the exact integer oracle in
+  `tests/all/arith.rs` never touches an `f64` at all, and that is now stated
+  where it applies rather than claimed for the whole file.
 
 ### Changed
 
