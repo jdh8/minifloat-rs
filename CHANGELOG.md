@@ -46,7 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2<var>p</var> quotient bits, below the <var>p</var> + 2 that rounding needs
   once <var>p</var> &gt; 20.  Both this and the cap are gated by mutation &mdash;
   putting either back fails `test_arithmetic_correctly_rounded_wide` &mdash; and
-  neither mutation is visible to any 16-bit shape.
+  neither mutation is visible to any 16-bit shape.  Measured on 2026-08-23 on
+  an AMD Ryzen 9 7950X3D, min across fifteen interleaved passes, normalising
+  makes division 1.064x as expensive at geomean across the fourteen existing
+  shapes (1.035x&ndash;1.107x), with untouched multiplication at
+  0.995x&ndash;1.007x.  In the `BF20` second opinion, soft / `f64` is 1.272x
+  for add, 1.326x for sub, 0.814x for mul, and 0.899x for div, 1.054x at
+  four-operator geomean.
 - `minifloat!` now asserts that both ends of the ULP scale fit the `i16` that
   `integer_decode` returns.  The condition is on the exponent *range* and not on
   `E`, because a custom bias slides the range under any width; with the default

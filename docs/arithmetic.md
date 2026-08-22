@@ -73,6 +73,28 @@ shift back fails `test_arithmetic_correctly_rounded_wide` at `E8M22`, one ULP
 out, and putting `ALIGN_CAP` back to 46 fails the same test where the aligned
 sum overflows.  Neither mutation is visible to any 16-bit shape.
 
+The correctness is not free.  On 2026-08-23, on an AMD Ryzen 9 7950X3D with
+rustc 1.98.0 (LLVM 22.1.8), the min of fifteen interleaved passes comparing
+`f51d531^` with `f51d531` put division at **1.064x** after/before across the
+fourteen existing shapes, from 1.035x to 1.107x.  `mul`, which the change cannot
+touch, spanned 0.995x to 1.007x.  Normalising the dividend therefore costs about
+6%, outside the control band on every shape.
+
+`BF20` exists only on the after side, so its second opinion is within the final
+binary rather than an A/B build.  One `cargo bench -- BF20` pass over the same
+operands gave:
+
+| `BF20` operator | soft / `f64` |
+| --- | --- |
+| add | 1.272x |
+| sub | 1.326x |
+| mul | 0.814x |
+| div | 0.899x |
+| **geomean** | **1.054x** |
+
+The integer route is still the faster bet for `BF20` multiplication and
+division, not for addition, subtraction, or the four-operator geomean.
+
 One thing the kernels do not bound is the exponent.  `integer_decode` returns an
 `i16`, so `__minifloat!` asserts that both ends of the ULP scale fit one —
 `MIN_EXP - MANTISSA_DIGITS ≥ i16::MIN` and `MAX_EXP - MANTISSA_DIGITS ≤
