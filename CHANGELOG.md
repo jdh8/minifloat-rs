@@ -38,9 +38,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pins the shape's constants against `core::f32`.
 - The arithmetic benchmark now times `E8M23`'s direct route against an `f64`
   round trip, adding four operator rows and four control rows to the target.
+- Standalone `from_f32` and `to_f32` benchmarks time `BF16` and `BF20`'s direct
+  conversion against the generic route in the same binary over identical,
+  representation-uniform inputs.
 
 ### Changed
 
+- Default-biased IEEE E8 shapes now convert to and from `f32` by shifting their
+  shared exponent field, and E11 shapes take the same route through `f64`.
+  This covers E8M1&ndash;E8M23 and E11M1&ndash;E11M20 under the crate's 32-bit
+  ceiling.  Construction rounds the discarded mantissa bits directly, ties to
+  even, and still canonicalizes NaN payloads while retaining their sign;
+  conversion out preserves a stored NaN payload.  Other host-width conversions
+  and every arithmetic route are unchanged.  In the standalone benchmarks the
+  direct / generic cost is 0.213x&ndash;0.217x for `from_f32` and
+  0.307x&ndash;0.309x for `to_f32`, min across fifteen alternating passes on
+  a Ryzen 9 7950X3D.  A dependent baseline-x86-64 probe shrinks BF20's two
+  conversion bodies from 101/27 instructions to 15/3, and E11M20's from 94/26
+  to 16/3.
 - `E8M23`'s `from_f32`/`to_f32` conversions and arithmetic now use `f32`
   directly.  `to_f32` is a bit-cast; `from_f32` preserves a NaN's sign while
   canonicalizing its payload; `+`, `-`, `*` and `/` wrap the `f32` result and
