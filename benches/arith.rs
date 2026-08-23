@@ -34,6 +34,7 @@ use common::{pairs, PAIRS};
 minifloat!(struct E11M4(u16): 11, 4);
 minifloat!(struct E2M13(u16): 2, 13);
 minifloat!(struct E12M3(u16): 12, 3);
+minifloat!(struct E8M23(u32): 8, 23);
 
 /// The hardware float a shape may be compared against
 #[derive(Debug, Clone, Copy)]
@@ -51,6 +52,8 @@ enum Route {
 /// from rounding to the shape once (Figueroa 1995).  Exactness alone is not
 /// enough &mdash; `E2M13` is exact in `f32`, yet a product of two of its
 /// significands is 28 digits wide.
+/// `E8M23` deliberately takes the `f64` route: `f32` would be the soft route
+/// itself, while `f64` remains an unchanged control for its benchmark row.
 ///
 /// `None` is a shape no hardware float can referee, which the benchmark skips.
 fn route<T: Minifloat>() -> Option<Route> {
@@ -126,7 +129,7 @@ fn bench_arithmetic(criterion: &mut Criterion) {
         F4E2M1FN F6E2M3FN F6E3M2FN
         F8E3M4 F8E4M3 F8E4M3FN F8E4M3FNUZ F8E4M3B11FNUZ F8E5M2 F8E5M2FNUZ
         F16 BF16 BF20
-        E11M4 E2M13 E12M3
+        E11M4 E2M13 E12M3 E8M23
     }
 }
 
