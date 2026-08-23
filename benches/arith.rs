@@ -9,8 +9,8 @@
 //! Soft arithmetic against a round trip through a hardware float
 //!
 //! Each operator is timed twice on the same operands: once as the crate
-//! computes it, on integer significands, and once the way a caller would fake
-//! it &mdash; widen both operands, let the FPU work, round the result back.
+//! computes it, and once the way a caller would fake it &mdash; widen both
+//! operands, let the FPU work, round the result back.
 //! [`route`] decides which hardware float a shape is entitled to; a shape no
 //! hardware float can round for is skipped rather than compared against a
 //! different answer.
@@ -27,10 +27,10 @@ use core::time::Duration;
 mod common;
 use common::{pairs, PAIRS};
 
-// Shapes reaching past `f32`, the same ones `tests/all/support.rs` sweeps.
-// They are what makes [`route`] visible: `E11M4` falls back to `f64`, `E2M13`
-// is exact in `f32` yet too wide to round through it, and `E12M3` overruns
-// `f64` altogether.
+// The wide shapes from `tests/all/support.rs` make [`route`] visible: `E11M4`
+// falls back to `f64`, `E2M13` is exact in `f32` yet too wide to round through
+// it, and `E12M3` overruns `f64` altogether.  `E8M23` is the host-float case
+// this round watches.
 minifloat!(struct E11M4(u16): 11, 4);
 minifloat!(struct E2M13(u16): 2, 13);
 minifloat!(struct E12M3(u16): 12, 3);
@@ -135,7 +135,7 @@ fn bench_arithmetic(criterion: &mut Criterion) {
 
 criterion::criterion_group! {
     name = arithmetic;
-    // The default 3 s warm-up plus 5 s measurement over 112 benches is a
+    // The default 3 s warm-up plus 5 s measurement over 128 benches is a
     // quarter-hour run.  Each iteration already averages 1024 operations, so
     // a shorter window is plenty to settle.
     config = Criterion::default()

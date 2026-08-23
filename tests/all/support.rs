@@ -204,7 +204,7 @@ pub(crate) fn test_most_8_bits<T: Check>(_: T) {
 /// | `2, 13` | the widest mantissa a 16-bit shape can hold |
 /// | `BF20` | the predefined one; exact in `f32`, refereed by `f64` |
 /// | `8, 22` | the widest brain float short of `f32`, last E8 shape `f64` can referee |
-/// | `8, 23` | `f32`'s own shape: the FPU and `core::f32` referee it with no caveat |
+/// | `8, 23` | `f32` itself: exact oracle for rounding, FPU gate for bits and NaNs |
 /// | `6, 25` | gaps past `ALIGN_CAP` with the widest significand that allows them |
 /// | `2, 29` | the widest mantissa a 32-bit shape holds, p = 30 |
 /// | `2, 29, FNUZ` | a non-IEEE format through the `u32` arms |

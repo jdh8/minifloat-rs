@@ -1,17 +1,18 @@
 # The arithmetic
 
-*Every operator works out a result exact enough to round correctly, on integer
-significands, and rounds it once.  Nothing else in this document is as
-important as that sentence.*
+*Every operator works out a result exact enough to round correctly and rounds
+it once.  All but the one shape that is `f32` do that on integer significands.
+Nothing else in this document is as important as those sentences.*
 
-## Integers, not a hardware float
+## Integers, except for the host float itself
 
 `+`, `-`, `*`, `/` used to evaluate in `f64` and round the answer back.  That is
 only ever as good as `f64`'s reach, and a declared shape can outrun it: `E12M3`
 squares 2<sup>&minus;1000</sup> to zero and 2<sup>1000</sup> to infinity through
 an `f64`, though it represents both answers exactly (`test_arithmetic_past_f64`).
 
-The route now is `to_parts` → an exact integer computation → `from_parts`:
+Apart from `E8M23`, the route is now `to_parts` → an exact integer computation
+→ `from_parts`:
 
 - **multiply** — two significands of at most 30 bits make a 60-bit product,
   which a `u64` holds exactly; exponents add.  Genuinely exact.
@@ -30,14 +31,16 @@ a rounding — that is what the cap and the normalisation are sized for — whic
 why the thesis says *exact enough to round* and `add_parts` and `div_parts` say
 the same in their own doc comments.
 
-`from_parts` is the only place *arithmetic* rounds, ties to even, by way of
-`detail::round_to_scale`.  One rounding, so no intermediate can lose what the
-format is able to hold, and a shape whose exponent range overruns `f64`'s is
-served as exactly as any other.  The crate's other two roundings are outbound
-and unrelated, and both now belong to fallback paths: the `as f32` cast that
-ends `to_f32` where the shape does not fit, and `to_f64` itself once a shape's
-exponent leaves `f64`'s range.  A shape the target holds exactly takes neither.
-`to_f32` and `to_f64` reassemble the target's bits and round nothing at all.
+`from_parts` is the only place integer-route arithmetic rounds, ties to even,
+by way of `detail::round_to_scale`.  One rounding, so no intermediate can lose
+what the format is able to hold, and a shape whose exponent range overruns
+`f64`'s is served as exactly as any other.  `E8M23` never reaches it: its FPU
+operation is already at the target precision, and `from_fpu` only wraps the
+result's bits.  The outbound conversion roundings remain fallback paths: the
+`as f32` cast that ends `to_f32` where the shape does not fit, and `to_f64`
+itself once a shape's exponent leaves `f64`'s range.  A shape the target holds
+exactly takes neither.  `to_f32` and `to_f64` reassemble the target's bits and
+round nothing at all.
 
 The special cases stopped borrowing `f64`'s at the same time.  An invalid
 operation yields the format's NaN, or `MAX` where the format has none, rather
@@ -102,7 +105,7 @@ i16::MAX`.  The condition is on the range and not on `E`, because a custom bias
 slides the range under any exponent width; with the default bias any `E` up to
 15 passes.  Every `i32` exponent sum an operator forms is then trivially safe.
 
-## Why there is no hardware route left to choose
+## Why there is no hardware route left to choose but one
 
 There used to be `USE_F32_ADD` and `USE_F32_MUL` selecting between two routes
 required to agree.  They are gone, and the survivor is not the slower one.
@@ -133,6 +136,61 @@ int&rarr;float convert on every operand and every result.
 The speed is a bonus.  The reason is correctness: the hardware route cannot
 referee a shape it cannot hold, so keeping it would have meant keeping a route
 that is wrong for exactly the shapes this crate exists to support.
+
+### `E8M23` is `f32`, so the crate hands it to the FPU
+
+`Minifloat::IS_F32` is stronger than exact conversion.  It requires the
+precision, exponent range and non-finite semantics all to match `f32`; among
+the shapes `minifloat!` admits, only S1E8M23 in the IEEE format with bias 127
+does.  Its `to_f32` is therefore a bit-cast, its `from_f32` wraps the same bits
+while canonicalizing a NaN payload, and its four operators are the corresponding
+`f32` instructions followed by `from_fpu`.
+
+The wrapper is load-bearing for NaNs.  An FPU may choose a NaN sign and payload,
+and an invalid operation may choose a different default on x86 and ARM, while
+the crate promises its positive `NAN` for arithmetic.  `from_fpu` replaces any
+hardware NaN with that one encoding; ordinary values, signed zero, infinities
+and subnormals pass through bit for bit.  `from_f32` separately preserves the
+input NaN's sign while canonicalizing its payload, as every conversion here
+does.
+
+On targets that lower this route to hardware `f32` instructions, it follows the
+target's rounding mode and DAZ/FTZ settings.  Rust's float semantics assume the
+default FP environment, so this is not an additional portable guarantee; the
+distinction reaches only a caller already outside `f32`'s contract through FFI.
+
+Measured from benchmark-only parent `79dcb9e` to this direct-route commit on
+2026-08-23 on an AMD Ryzen 9 7950X3D with rustc 1.98.0 (LLVM 22.1.8) and
+`-C target-cpu=native`, min of fifteen interleaved passes pinned to CPU 6 with
+its SMT sibling free, the direct route costs this fraction of the old integer
+route:
+
+| `E8M23` operator | after / before |
+| --- | ---: |
+| add | 0.087x |
+| sub | 0.098x |
+| mul | 0.144x |
+| div | 0.365x |
+| **geomean** | **0.146x** |
+
+One separate Criterion pass of the `arith` target corroborated the direction
+at 0.087x, 0.099x, 0.143x and 0.366x respectively, also 0.146x at geomean.
+
+The 28 unchanged rows &mdash; both arms of `F16`, `BF16` and `BF20`, plus
+`E8M23`'s `f64` arm &mdash; span 0.981x&ndash;1.029x.  A normalized symbol audit
+agrees with the experiment: 124 of the 128 iteration bodies are identical, and
+the only four that changed are these `E8M23` soft rows.  Every result therefore
+clears this build pair's control band, division by a factor of 2.7 at the
+closest.
+
+Identity does not license routing every narrower shape through a host float.
+Such a route is possible where an exhaustive proof covers it, but adopting one
+per operator and per shape would split an engine that currently has one path
+and spend that shape's independent regression detector.  `BF16` already shows
+the proof burden: its subnormals leave `f32` only 16 digits where the 2<var>p</var>
++ 2 rule asks for 18, and only the exhaustive sweep licenses the benchmark's
+pairing.  A measured round can make that trade; this identity does not make it
+for free.
 
 ## The 2*p* + 2 rule, and why the benchmark skips shapes
 
@@ -188,13 +246,14 @@ is why the count is what it is.  Those shapes are sampled by *code* as well:
 above 20 bits `support::codes` walks an odd stride landing near a million, odd
 so every low-bit pattern and hence every tie parity is still visited.
 
-`E8M23` is the shape that needs no referee at all, because it *is* `f32`.
-`test_f32_shape_matches_hardware` runs 2<sup>22</sup> pairs of it through all
-four operators against the FPU's own bits — the sign of a zero, the ±∞ an
-overflow or a division by zero produces, and every subnormal result, with only
-the NaN payload exempt.  It is the one arithmetic gate in the suite with no
-Figueroa caveat attached, and `test_f32_shape_matches_core` pins the constants
-against `core::f32` the same way.
+`E8M23` now has two referees with different jobs.  The wide exact-oracle sample
+independently checks its rounding.  `test_f32_shape_matches_hardware` runs
+2<sup>22</sup> pairs through the direct route and checks its plumbing against
+the FPU's own bits — signed zero, infinities and subnormals pass straight
+through, while every NaN must return the crate's one canonical encoding.  Four
+deterministic invalid operations and a negative payload-carrying NaN pin the
+case random operands practically never reach.  `test_f32_shape_matches_core`
+pins the shape's constants against `core::f32`.
 
 The older `f64` and `f32` comparisons stay in the file on purpose.  They are
 narrower — they cannot referee a shape their float cannot hold — but they cover

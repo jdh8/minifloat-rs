@@ -155,13 +155,24 @@ fn test_has_exact_conversion_consts_wide() {
     minifloat!(struct E11M4(u16): 11, 4);
     minifloat!(struct E12M3(u16): 12, 3);
     minifloat!(struct E2M13(u16): 2, 13);
+    minifloat!(struct E8M22(u32): 8, 22);
     minifloat!(struct E8M23(u32): 8, 23);
+    minifloat!(struct E8M23FN(u32): 8, 23, FN);
+    minifloat!(struct E7M23(u32): 7, 23);
+    minifloat!(struct E8M23B126(u32): 8, 23, 126);
     minifloat!(struct E6M25(u32): 6, 25);
     minifloat!(struct E2M29(u32): 2, 29);
 
     // `E8M23` is `f32` exactly; one more mantissa bit is one too many.
     const _: () = assert!(E8M23::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(E8M23::HAS_EXACT_F64_CONVERSION);
+    const _: () = assert!(E8M23::IS_F32);
+    const _: () = assert!(!E8M22::IS_F32);
+    const _: () = assert!(!BF20::IS_F32);
+    const _: () = assert!(!F16::IS_F32);
+    const _: () = assert!(!E8M23FN::IS_F32);
+    const _: () = assert!(!E7M23::IS_F32);
+    const _: () = assert!(!E8M23B126::IS_F32);
     const _: () = assert!(!E6M25::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(E6M25::HAS_EXACT_F64_CONVERSION);
     const _: () = assert!(!E2M29::HAS_EXACT_F32_CONVERSION);

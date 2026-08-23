@@ -11,12 +11,12 @@ whether to actually paste it in is a judgement the inliner makes with
 information this crate does not have.  `always` overrules that judgement, and
 there is no measurement here that asks for it.
 
-The set, as of e06641b, is everything below — 61 attributes.  Nothing with a
-body is left out; the only unmarked items in the crate are the bodiless
-declarations in `trait Minifloat` and its two generic default methods.
+The set is everything below — 62 attributes.  Nothing with a body is left out;
+the only unmarked items in the crate are the bodiless declarations in trait
+`Minifloat` and its two generic default methods.
 
 - the four operators, their four compound forms, and `Neg`;
-- the rounding core: `from_parts`, `to_parts`, `add_impl`;
+- the rounding core: `from_parts`, `to_parts`, `add_impl`, `from_fpu`;
 - the raw `from_bits` / `to_bits` pair, and the four conversions `from_f32`,
   `from_f64`, `to_f32`, `to_f64`;
 - the two `From` impls that `impl_from_minifloat_for_f32!` and

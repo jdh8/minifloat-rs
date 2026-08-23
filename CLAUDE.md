@@ -42,14 +42,15 @@ rustfmt --check --edition 2021 path/to/new_file.rs
 rather than adding an `#[allow]`.  CI does not run it — CI is `cargo build
 --release` and `cargo test --release` and nothing else — so it is on you.
 
-**Benchmark only on an idle box.**  The box runs a poker solver that will take
-every core.  `pgrep -af poker` first, and if it is running, ask — never kill it
-unasked.  The protocol is [docs/benchmarking.md](docs/benchmarking.md), and it
-is not optional: interleaved builds, min-of-N across at least 15 alternating
-passes each, and a control route.  The control's own spread *is* the noise
-floor for that build pair — calibrate it every round rather than assuming
-0.98x, and check in the symbol table that the control's code is actually
-unchanged.  Relocation alone moved byte-identical rows 9% on 2026-08-21.
+**Benchmark only on a free physical core.**  The box runs a poker solver that
+will take every core.  `pgrep -af poker` first, and if it is running, ask —
+never kill it unasked.  The protocol is [docs/benchmarking.md](docs/benchmarking.md),
+and it is not optional: check both SMT siblings, use interleaved builds,
+min-of-N across at least 15 alternating passes each, and a control route.  The
+control's own spread *is* the noise floor for that build pair — calibrate it
+every round rather than assuming 0.98x, and check in the symbol table that the
+control's code is actually unchanged.  Relocation alone moved byte-identical
+rows 9% on 2026-08-21.
 
 ## The correctness gate
 
@@ -57,7 +58,7 @@ unchanged.  Relocation alone moved byte-identical rows 9% on 2026-08-21.
 takes about 40 seconds and it has caught every arithmetic mistake so far.  The
 debug build is slow enough to be worth avoiding for these.
 
-Two distinct gates live in there, and it is worth not conflating them:
+Three distinct gates live in there, and it is worth not conflating them:
 
 - **the exact integer oracle** (`test_arithmetic_correctly_rounded`) — every
   ordered pair of *finite* operands of all 34 shapes in the test roster, refereed
@@ -66,8 +67,9 @@ Two distinct gates live in there, and it is worth not conflating them:
   2<sup>32</sup> ordered pairs of `F16` and `BF16`, which is what licenses
   `benches/arith.rs` to time the two routes against each other;
 - **the hardware gate** (`test_f32_shape_matches_hardware`) — `E8M23` *is*
-  `f32`, so 2<sup>22</sup> pairs of it have to land on the FPU's own bits.  The
-  only arithmetic gate here with no Figueroa caveat.
+  `f32`, so 2<sup>22</sup> pairs check that its route preserves the FPU's sign of
+  zero, infinities and subnormals, and canonicalizes every NaN.  The exact
+  oracle independently referees its rounding.
 
 The wide roster (`support::test_wide_shapes`) is where the 16- and 32-bit shapes
 live, sampled rather than walked: `support::codes` is exhaustive through 20 bits

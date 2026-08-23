@@ -5,8 +5,8 @@
 [![Build Status](https://github.com/jdh8/minifloat-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/jdh8/minifloat-rs)
 [![Benchmark](https://github.com/jdh8/minifloat-rs/actions/workflows/bench.yml/badge.svg)](https://jdh8.github.io/minifloat-rs/dev/bench/)
 
-Rust meta-library for minifloats — emulate floating-point types with fewer
-bits than the built-in `f32` / `f64`, configurable along every axis.
+Rust meta-library for minifloats — emulate binary floating-point formats up to
+32 bits, configurable along every axis.
 
 ## Quick start
 
@@ -103,7 +103,9 @@ yourself still means all-ones-is-NaN, and still has a maximum of 4.
   `f64::from(x)` via the [`impl_from_minifloat_for_f32!`] /
   [`impl_from_minifloat_for_f64!`] helpers; every predefined type already opts
   in.  Lossy conversions stay method-only: `from_f32`, `from_f64`, and the
-  always-available `to_f32` / `to_f64`.
+  always-available `to_f32` / `to_f64`.  `IS_F32` asks the stronger question
+  whether a generated type is `f32` bit for bit; there `to_f32` is the identity,
+  and `from_f32` is too except that a NaN payload is canonicalized.
 
 - **Bit-exact storage is the public contract.**  All representations are
   inspected via `to_bits` / `from_bits`.  NaN sign bits are preserved through
@@ -119,8 +121,10 @@ Binary `+`, `-`, `*`, `/` and their compound forms are implemented for every
 generated type, and every one of them is correctly rounded.  Each operator
 works out the result on integer significands &mdash; a product, a signed sum, or
 a quotient with a sticky remainder &mdash; exactly enough to round it once, ties
-to even.  No `f32` or `f64` sits in the middle, so a shape whose exponent range
-overruns `f64`'s rounds as exactly as any other.
+to even.  The one exception is S1E8M23 in the IEEE format with bias 127: it is
+`f32`, so it uses `f32` arithmetic directly.  No host float sits between any
+other shape and its result, so a shape whose exponent range overruns `f64`'s
+rounds as exactly as any other.
 
 An invalid operation &mdash; 0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞ &mdash; yields
 the format's NaN, or `MAX` where the format has none, the same saturation
@@ -146,7 +150,7 @@ direct use as `HashMap` keys requires a wrapper.
 The decisions behind the arithmetic, and the measurements that justify them, are
 recorded in the repository rather than here:
 [`docs/arithmetic.md`](https://github.com/jdh8/minifloat-rs/blob/main/docs/arithmetic.md)
-for why every operator rounds once on integer significands,
+for how every operator reaches its correctly rounded result,
 [`docs/inlining.md`](https://github.com/jdh8/minifloat-rs/blob/main/docs/inlining.md)
 for what a dependent crate gets to inline, and
 [`docs/benchmarking.md`](https://github.com/jdh8/minifloat-rs/blob/main/docs/benchmarking.md)

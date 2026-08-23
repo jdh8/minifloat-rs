@@ -102,12 +102,13 @@ impl Format {
 /// 1. [`FN`](Format::FN) and [`FNUZ`](Format::FNUZ) types do not have infinities.
 /// 2. [`FNUZ`](Format::FNUZ) types do not have a negative zero.
 ///
-/// Binary arithmetic (`+`, `-`, `*`, `/`) is correctly rounded for every shape:
-/// each operator works out the result on integer significands, exactly enough
-/// to round it once, ties to even.  No hardware float is involved, so a type whose
-/// exponent range overruns [`f64`]'s is served as exactly as any other.  An
-/// invalid operation — 0/0, ∞ &minus; ∞, ∞ &times; 0, ∞/∞ — yields the format's
-/// NaN, or [`MAX`][Self::MAX] where the format has none.
+/// Binary arithmetic (`+`, `-`, `*`, `/`) is correctly rounded for every shape.
+/// A type that [`IS_F32`][Self::IS_F32] runs directly on [`f32`]; every other
+/// shape works out the result on integer significands, exactly enough to round
+/// it once, ties to even.  A type whose exponent range overruns [`f64`]'s is
+/// therefore served as exactly as any other.  An invalid operation — 0/0,
+/// ∞ &minus; ∞, ∞ &times; 0, ∞/∞ — yields the format's NaN, or
+/// [`MAX`][Self::MAX] where the format has none.
 ///
 /// [flt]: https://docs.rs/num-traits/latest/num_traits/float/trait.Float.html
 pub trait Minifloat:
@@ -209,6 +210,24 @@ pub trait Minifloat:
     const HAS_EXACT_F64_CONVERSION: bool = f64::MANTISSA_DIGITS >= Self::MANTISSA_DIGITS
         && f64::MAX_EXP >= Self::MAX_EXP
         && f64::MIN_EXP <= Self::MIN_EXP;
+
+    /// Whether this type *is* [`f32`], bit for bit
+    ///
+    /// Precision, exponent range and non-finite semantics all have to match;
+    /// among the shapes [`minifloat!`] admits that is S1E8M23 in the
+    /// [`IEEE`](Format::IEEE) format with bias 127 — the default, spelt out or
+    /// not — and nothing else.  `FN`/`Finite` at 8, 23 reach one binade past
+    /// `f32`, and any other bias slides the range off it.  Where it holds,
+    /// [`to_f32`][Self::to_f32] is the identity, [`from_f32`][Self::from_f32]
+    /// is the identity on everything but a NaN — whose payload canonicalizes,
+    /// as it does through every conversion — and every operator uses [`f32`]
+    /// arithmetic directly.  A stronger question than
+    /// [`HAS_EXACT_F32_CONVERSION`][Self::HAS_EXACT_F32_CONVERSION], which only
+    /// asks whether an `f32` can hold every value.
+    const IS_F32: bool = Self::FORMAT.has_inf()
+        && Self::MANTISSA_DIGITS == f32::MANTISSA_DIGITS
+        && Self::MAX_EXP == f32::MAX_EXP
+        && Self::MIN_EXP == f32::MIN_EXP;
 
     /// One representation of NaN, or `None` for formats without one
     ///
@@ -636,6 +655,9 @@ macro_rules! __minifloat {
             pub const HAS_EXACT_F64_CONVERSION: bool =
                 <Self as $crate::Minifloat>::HAS_EXACT_F64_CONVERSION;
 
+            /// Whether this type *is* [`f32`], bit for bit
+            pub const IS_F32: bool = <Self as $crate::Minifloat>::IS_F32;
+
             /// The largest number of this type
             ///
             /// This value would be +∞ if the type has infinities.  Otherwise, it is
@@ -883,8 +905,22 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
+            // `IS_F32` forces 32-bit storage, so the fast arm cannot truncate;
+            // narrower instantiations fold it away.
+            #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub fn from_f32(x: f32) -> Self {
+                if Self::IS_F32 {
+                    // The shape has nothing to round or decompose.  Keep a
+                    // NaN's sign bit while canonicalizing its payload.
+                    let bits = x.to_bits() as $bits;
+                    let value = Self::from_bits(bits);
+                    return if value.is_nan() {
+                        Self::from_bits(Self::NAN_BITS | (bits & !Self::ABS_MASK))
+                    } else {
+                        value
+                    };
+                }
                 // Widening to `f64` is exact, so this still rounds only once.
                 Self::from_f64(f64::from(x))
             }
@@ -912,9 +948,9 @@ macro_rules! __minifloat {
             /// Correctly rounded `sign` &times; `significand` &times;
             /// 2<sup>`exponent`</sup>
             ///
-            /// This is where every rounding in the crate happens.  The triple
-            /// is an exact number, or one whose lowest bit is sticky, so it
-            /// can come from an [`f64`] or from arithmetic of its own.
+            /// This is where every integer-route rounding in the crate happens.
+            /// The triple is an exact number, or one whose lowest bit is sticky,
+            /// so it can come from an [`f64`] or from arithmetic of its own.
             #[inline]
             fn from_parts(negative: bool, significand: u64, exponent: i32) -> Self {
                 let sign_bit = <$bits>::from(negative) << (Self::E + Self::M);
@@ -1022,6 +1058,21 @@ macro_rules! __minifloat {
                 Self(Self::HUGE.0 | ((negative as $bits) << (Self::E + Self::M)))
             }
 
+            /// Wrap what the FPU worked out, canonicalizing its NaN
+            ///
+            /// Reachable only where `IS_F32` holds, so the bits are already
+            /// the shape's.  The NaN is not: the sign and payload of a NaN an
+            /// `f32` operation yields are unspecified, and an invalid operation
+            /// here yields `INVALID` on every host.
+            // `IS_F32` forces 32-bit storage, so nothing truncates; narrower
+            // instantiations never reach this.
+            #[allow(clippy::cast_possible_truncation)]
+            #[inline]
+            const fn from_fpu(x: f32) -> Self {
+                let value = Self::from_bits(x.to_bits() as $bits);
+                if value.is_nan() { Self::INVALID } else { value }
+            }
+
             /// Best effort conversion to [`f64`]
             ///
             /// This is exact unless the exponent leaves [`f64`]'s range, where
@@ -1084,6 +1135,10 @@ macro_rules! __minifloat {
             #[must_use]
             #[inline]
             pub fn to_f32(self) -> f32 {
+                if Self::IS_F32 {
+                    // The code is the value, NaN payload and all.
+                    return f32::from_bits(u32::from(self.0));
+                }
                 let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
 
                 if self.is_nan() {
@@ -1185,6 +1240,9 @@ macro_rules! __minifloat {
             type Output = Self;
             #[inline]
             fn add(self, rhs: Self) -> Self {
+                if Self::IS_F32 {
+                    return Self::from_fpu(self.to_f32() + rhs.to_f32());
+                }
                 self.add_impl(rhs, false)
             }
         }
@@ -1193,6 +1251,9 @@ macro_rules! __minifloat {
             type Output = Self;
             #[inline]
             fn sub(self, rhs: Self) -> Self {
+                if Self::IS_F32 {
+                    return Self::from_fpu(self.to_f32() - rhs.to_f32());
+                }
                 self.add_impl(rhs, true)
             }
         }
@@ -1201,6 +1262,9 @@ macro_rules! __minifloat {
             type Output = Self;
             #[inline]
             fn mul(self, rhs: Self) -> Self {
+                if Self::IS_F32 {
+                    return Self::from_fpu(self.to_f32() * rhs.to_f32());
+                }
                 if self.is_nan() || rhs.is_nan() {
                     return Self::INVALID;
                 }
@@ -1224,6 +1288,9 @@ macro_rules! __minifloat {
             type Output = Self;
             #[inline]
             fn div(self, rhs: Self) -> Self {
+                if Self::IS_F32 {
+                    return Self::from_fpu(self.to_f32() / rhs.to_f32());
+                }
                 if self.is_nan() || rhs.is_nan() {
                     return Self::INVALID;
                 }

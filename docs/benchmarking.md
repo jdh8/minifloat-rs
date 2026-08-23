@@ -1,11 +1,13 @@
 # The benchmarking protocol
 
-*A number from this repository means a min-of-N across interleaved builds on an
-idle box, or it means nothing.*
+*A number from this repository means a min-of-N across interleaved builds on a
+checked, pinned physical core, or it means nothing.*
 
-The box these numbers come from: AMD Ryzen 7 8700F (8 cores, 16 threads),
-Fedora 44, rustc 1.97.1 with LLVM 22.1.8.  A ratio from a different machine is a
-different claim.
+The reference box for measurements through 2026-08-21 was an AMD Ryzen 7 8700F
+(8 cores, 16 threads), Fedora 44, rustc 1.97.1 with LLVM 22.1.8.  The 2026-08-23
+rounds use an AMD Ryzen 9 7950X3D (16 cores, 32 threads), Ubuntu 22.04.5 LTS,
+rustc 1.98.0 with LLVM 22.1.8.  A ratio from a different machine is a different
+claim.
 
 ## Stop the poker solver first
 
@@ -14,10 +16,11 @@ measurement taken beside it is worthless, and killing it unasked is worse.
 
 ```sh
 pgrep -af poker
-uptime          # the one-minute average should be near zero
 ```
 
-If it is running, ask before touching it.  Proceed only once the box is idle.
+If it is running, ask before touching it.  Proceed only once it has stopped,
+then choose a free core and SMT sibling as described below.  Do not substitute
+load average for that check.
 
 ## Interleave the builds, never run A then B
 
@@ -61,9 +64,9 @@ cat /sys/devices/system/cpu/cpu6/topology/thread_siblings_list
 
 Take the SMT sibling too, or the other thread of your core is someone else's.
 And do not gate on `/proc/loadavg`: it counts runnable tasks absolutely, not per
-core, so on this 16-thread box one pinned neighbour already reads 1.0 and a
-threshold near zero can never clear.  The question is whether *your* core is
-free, which loadavg does not answer.
+core.  One pinned neighbour already reads 1.0, so a threshold near zero can
+never clear.  The question is whether *your* core is free, which loadavg does
+not answer.
 
 ## Take the minimum, not the mean
 
@@ -153,9 +156,9 @@ in the crate under test and never in the inputs.  Both run a deliberately short
 criterion window — 200 ms warm-up, 1 s
 measurement, against criterion's 3 s and 5 s defaults.  Each iteration already
 averages 1024 operations, so the estimate settles well inside that; the defaults
-would turn 112 benchmarks into a quarter-hour run for no extra resolution.  It
-is still the *second* opinion: a headline claim gets the interleaved treatment
-above, and criterion is asked whether it agrees.
+would turn the arithmetic target's 128 benchmarks into a quarter-hour run for
+no extra resolution.  It is still the *second* opinion: a headline claim gets
+the interleaved treatment above, and criterion is asked whether it agrees.
 
 When the interleaved probe and the criterion geomean disagree in sign, neither
 is reportable.  When they agree, quote both — 6520d5a quoted 1.130x against
@@ -243,7 +246,17 @@ hardware arm of
 `from_f32(x.to_f32() op y.to_f32())`, so a conversion regression does show up
 there &mdash; mixed with the operator, which is the limitation and the reason a
 standalone route will eventually be worth building.  It gets built by the round
-that first optimizes a converter, not before.
+that first optimizes a converter for a shape that is not already a host float,
+not before.
+
+The `E8M23` host-float route made `from_f32` and `to_f32` bit operations, which
+need no standalone timing target.  On 2026-08-23, a dependent `-O3` probe at
+baseline x86-64, rustc 1.98.0 with LLVM 22.1.8, counted `from_f32` at 99
+instructions in benchmark-only parent `79dcb9e` and 9 in this direct-route
+commit, and `to_f32` at 25 before and 2 after, with no calls after.  That settles
+the converter half of this round by the rule in “When the benchmark cannot see
+it”; the operator half is timed, and the first non-host-float converter
+optimization still owes the standalone route above.
 
 When that round comes, the shape to copy is the Rust sibling,
 [`jdh8/metallic-rs`](https://github.com/jdh8/metallic-rs): one bench file per

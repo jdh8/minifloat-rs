@@ -392,8 +392,9 @@ fn test_arithmetic_correctly_rounded_wide() {
 /// because a hardware float is standing in for a narrower shape.  Here the
 /// shape and the hardware are the same format, so the operators owe the FPU's
 /// own bits: the sign of a zero, the ±∞ an overflow or a division by zero
-/// produces, and every subnormal result.  Only the NaN payload is exempt,
-/// which `same_mini` already equates.
+/// produces, and every subnormal result.  A hardware NaN must come back as the
+/// crate's canonical NaN exactly, including invalid operations that random
+/// operand codes practically never reach.
 #[test]
 fn test_f32_shape_matches_hardware() {
     minifloat!(struct E8M23(u32): 8, 23);
@@ -411,12 +412,30 @@ fn test_f32_shape_matches_hardware() {
             ('*', x * y, xf * yf),
             ('/', x / y, xf / yf),
         ] {
-            let expected = E8M23::from_bits(hardware.to_bits());
-            assert!(
-                same_mini(actual, expected),
+            let expected = if hardware.is_nan() {
+                E8M23::NAN
+            } else {
+                E8M23::from_bits(hardware.to_bits())
+            };
+            assert_eq!(
+                actual.to_bits(),
+                expected.to_bits(),
                 "{x:?} {op} {y:?}: got {actual:?}, expected {expected:?}"
             );
         }
+    }
+
+    let payload_nan = E8M23::from_bits(0xFFC0_0BAD);
+    assert_eq!(payload_nan.to_f32().to_bits(), payload_nan.to_bits());
+    assert_eq!(E8M23::from_f32(payload_nan.to_f32()).to_bits(), 0xFFC0_0000);
+    for actual in [
+        E8M23::INFINITY - E8M23::INFINITY,
+        E8M23::ZERO * E8M23::INFINITY,
+        E8M23::ZERO / E8M23::ZERO,
+        E8M23::INFINITY / E8M23::INFINITY,
+        payload_nan + E8M23::ZERO,
+    ] {
+        assert_eq!(actual.to_bits(), E8M23::NAN.to_bits());
     }
 }
 
