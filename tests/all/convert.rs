@@ -7,6 +7,7 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::support::*;
+use minifloat::detail::exp2i;
 use minifloat::{
     minifloat, Minifloat, BF16, BF20, F16, F4E2M1FN, F6E2M3FN, F6E3M2FN, F8E3M4,
     F8E4M3, F8E4M3B11FNUZ, F8E4M3FN, F8E4M3FNUZ, F8E5M2, F8E5M2FNUZ,
@@ -254,4 +255,24 @@ fn test_has_exact_conversion_consts_wide() {
     const _: () = assert!(!E12M3::HAS_EXACT_F64_CONVERSION);
     const _: () = assert!(E2M13::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(E2M13::HAS_EXACT_F64_CONVERSION);
+}
+
+/// `exp2i` is the scale factor behind every conversion, so each of its
+/// regimes — overflow to infinity, normals, subnormals, flush to zero —
+/// is walked against an oracle that doubles and halves a power of two.
+/// Both operations are exact in `f64` through the entire sweep, including
+/// the final halving of the smallest subnormal, which ties to even zero
+/// exactly where `exp2i` flushes.
+#[test]
+fn test_exp2i_covers_every_regime() {
+    let mut power = 1.0;
+    for x in 0..=1025 {
+        assert!(same_f64(exp2i(x), power), "x = {x}");
+        power *= 2.0;
+    }
+    let mut power = 1.0;
+    for x in (-1076..=0).rev() {
+        assert!(same_f64(exp2i(x), power), "x = {x}");
+        power *= 0.5;
+    }
 }
