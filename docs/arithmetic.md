@@ -362,6 +362,23 @@ Nothing hand-written would improve on that.
 downstream code.  It was kept for the `-O1` case and for not depending on a
 compiler heuristic; the full argument is in [inlining.md](inlining.md).
 
+**LLVM leaves the two `add_parts` alignments scalar through x86-64-v3.**  On
+2026-08-23, a dependent `-O3` probe of `fe5bd18` built with rustc
+1.98.0 (LLVM 22.1.8) on the same AMD Ryzen 9 7950X3D contains no selected
+packed-integer instruction with explicit `target-cpu=x86-64` or `x86-64-v3`.
+Instruction counts for the complete exported addition body are:
+
+| shape | x86-64 | x86-64-v3 | native AVX-512 |
+| --- | ---: | ---: | ---: |
+| `F8E5M2` | 130 scalar | 125 scalar | 116 vectorized |
+| `F16` | 131 scalar | 126 scalar | 116 vectorized |
+| `BF16` | 162 scalar | 149 scalar | 136 vectorized |
+
+The native build shows that LLVM can pair the work when AVX-512 is available;
+the crate's baseline and x86-64-v3 targets do not.  No code follows from a
+disassembly result: whether the wider instructions win is a timing question
+for a later round.
+
 ## How the subtraction change was checked
 
 Three gates, in order.
