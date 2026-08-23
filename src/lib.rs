@@ -220,8 +220,8 @@ pub trait Minifloat:
     /// `f32`, and any other bias slides the range off it.  Where it holds,
     /// [`to_f32`][Self::to_f32] is the identity, [`from_f32`][Self::from_f32]
     /// is the identity on everything but a NaN — whose payload canonicalizes,
-    /// as it does through every conversion — and every operator uses [`f32`]
-    /// arithmetic directly.  A stronger question than
+    /// as it does through every conversion into a minifloat — and every operator
+    /// uses [`f32`] arithmetic directly.  A stronger question than
     /// [`HAS_EXACT_F32_CONVERSION`][Self::HAS_EXACT_F32_CONVERSION], which only
     /// asks whether an `f32` can hold every value.
     const IS_F32: bool = Self::FORMAT.has_inf()
@@ -704,6 +704,16 @@ macro_rules! __minifloat {
             /// Magnitude mask for internal usage
             const ABS_MASK: $bits = (1 << (Self::E + Self::M)) - 1;
 
+            /// Whether this shape has [`f32`]'s exponent and special-value fields
+            const SHARES_F32_EXPONENT: bool = Self::HAS_INF
+                && Self::MIN_EXP == f32::MIN_EXP
+                && Self::MAX_EXP == f32::MAX_EXP;
+
+            /// Whether this shape has [`f64`]'s exponent and special-value fields
+            const SHARES_F64_EXPONENT: bool = Self::HAS_INF
+                && Self::MIN_EXP == f64::MIN_EXP
+                && Self::MAX_EXP == f64::MAX_EXP;
+
             /// Bit pattern of the canonical NaN
             ///
             /// Meaningful only when [`HAS_NAN`][Self::HAS_NAN] is `true`.
@@ -905,21 +915,25 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
-            // `IS_F32` forces 32-bit storage, so the fast arm cannot truncate;
-            // narrower instantiations fold it away.
+            // The shared-field route shifts the sign into the generated type's
+            // bitwidth; every other instantiation folds it away.
             #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub fn from_f32(x: f32) -> Self {
-                if Self::IS_F32 {
-                    // The shape has nothing to round or decompose.  Keep a
-                    // NaN's sign bit while canonicalizing its payload.
-                    let bits = x.to_bits() as $bits;
-                    let value = Self::from_bits(bits);
-                    return if value.is_nan() {
-                        Self::from_bits(Self::NAN_BITS | (bits & !Self::ABS_MASK))
-                    } else {
-                        value
-                    };
+                if Self::SHARES_F32_EXPONENT {
+                    let shift = f32::MANTISSA_DIGITS.saturating_sub(Self::MANTISSA_DIGITS);
+                    let bits = x.to_bits();
+
+                    // Rounding a NaN can erase its retained payload and spell infinity.
+                    if bits & (u32::MAX >> 1) > u32::from(Self::HUGE.0) << shift {
+                        let sign = (bits >> shift) as $bits & !Self::ABS_MASK;
+                        return Self::from_bits(sign | Self::NAN_BITS);
+                    }
+                    if shift == 0 {
+                        return Self::from_bits(bits as $bits);
+                    }
+                    let bias = (1 << (shift - 1)) - 1 + ((bits >> shift) & 1);
+                    return Self::from_bits(((bits + bias) >> shift) as $bits);
                 }
                 // Widening to `f64` is exact, so this still rounds only once.
                 Self::from_f64(f64::from(x))
@@ -932,8 +946,23 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
+            // The shared-field route shifts the sign into the generated type's
+            // bitwidth; every other instantiation folds it away.
+            #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub fn from_f64(x: f64) -> Self {
+                if Self::SHARES_F64_EXPONENT {
+                    let shift = f64::MANTISSA_DIGITS.saturating_sub(Self::MANTISSA_DIGITS);
+                    let bits = x.to_bits();
+
+                    // Rounding a NaN can erase its retained payload and spell infinity.
+                    if bits & (u64::MAX >> 1) > u64::from(Self::HUGE.0) << shift {
+                        let sign = (bits >> shift) as $bits & !Self::ABS_MASK;
+                        return Self::from_bits(sign | Self::NAN_BITS);
+                    }
+                    let bias = (1 << (shift - 1)) - 1 + ((bits >> shift) & 1);
+                    return Self::from_bits(((bits + bias) >> shift) as $bits);
+                }
                 let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
 
                 if x.is_nan() {
@@ -1077,10 +1106,15 @@ macro_rules! __minifloat {
             ///
             /// This is exact unless the exponent leaves [`f64`]'s range, where
             /// the result rounds, overflows, or underflows like any other
-            /// [`f64`] computation.
+            /// [`f64`] computation.  A stored NaN payload is preserved when the
+            /// format has [`f64`]'s exponent field.
             #[must_use]
             #[inline]
             pub fn to_f64(self) -> f64 {
+                if Self::SHARES_F64_EXPONENT {
+                    let shift = f64::MANTISSA_DIGITS.saturating_sub(Self::MANTISSA_DIGITS);
+                    return f64::from_bits(u64::from(self.0) << shift);
+                }
                 let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
 
                 if self.is_nan() {
@@ -1132,12 +1166,15 @@ macro_rules! __minifloat {
             }
 
             /// Best effort conversion to [`f32`]
+            ///
+            /// A stored NaN payload is preserved when the format has [`f32`]'s
+            /// exponent field.
             #[must_use]
             #[inline]
             pub fn to_f32(self) -> f32 {
-                if Self::IS_F32 {
-                    // The code is the value, NaN payload and all.
-                    return f32::from_bits(u32::from(self.0));
+                if Self::SHARES_F32_EXPONENT {
+                    let shift = f32::MANTISSA_DIGITS.saturating_sub(Self::MANTISSA_DIGITS);
+                    return f32::from_bits(u32::from(self.0) << shift);
                 }
                 let sign = if self.is_sign_negative() { -1.0 } else { 1.0 };
 

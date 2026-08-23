@@ -25,3 +25,11 @@ harness = false
 [[bench]]
 name = "predicates"
 harness = false
+
+[[bench]]
+name = "from_f32"
+harness = false
+
+[[bench]]
+name = "to_f32"
+harness = false

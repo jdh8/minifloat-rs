@@ -137,6 +137,38 @@ The speed is a bonus.  The reason is correctness: the hardware route cannot
 referee a shape it cannot hold, so keeping it would have meant keeping a route
 that is wrong for exactly the shapes this crate exists to support.
 
+### Matching exponent fields make conversion a shift
+
+Default-biased IEEE E8 shapes have `f32`'s exponent and special-value fields;
+default-biased IEEE E11 shapes have `f64`'s.  The crate's 32-bit ceiling leaves
+E8M1 through E8M23 and E11M1 through E11M20.  Conversion out shifts the whole
+code into the host layout.  Conversion in drops the unused mantissa bits with
+an integer round-to-nearest-even bias, so no host arithmetic or floating-point
+rounding mode participates.
+
+This is only a conversion route.  A BF shape's `f64` conversions still take the
+generic path, and every narrower shape keeps its integer arithmetic.  Input
+NaNs retain their sign and canonicalize their payload before the rounding bias
+can erase it into infinity; conversion out preserves the stored sign and
+payload because the entire code shifts unchanged.
+
+The standalone conversion targets put the direct route against the generic one
+in the same binary.  Min across fifteen alternating passes pinned to CPU 5 of a
+Ryzen 9 7950X3D, with sibling 21 free, rustc 1.98.0 (LLVM 22.1.8), 2026-08-24:
+
+| direct / generic | `BF16` | `BF20` |
+| --- | ---: | ---: |
+| `from_f32` | 0.213x | 0.217x |
+| `to_f32` | 0.307x | 0.309x |
+
+For `from_f32`, the generic row is the route this change replaced.  The
+`to_f32` comparator is an exact `f64` round trip, not the previous exact
+reassembly, so that row describes the two routes in the final binary rather
+than an after/before ratio.  A dependent `-O3` baseline-x86-64 probe supplies
+that side without timing noise: `BF20` `from_f32` shrinks from 101 instructions
+to 15 and `to_f32` from 27 to 3; E11M20 `from_f64` shrinks from 94 to 16 and
+`to_f64` from 26 to 3.
+
 ### `E8M23` is `f32`, so the crate hands it to the FPU
 
 `Minifloat::IS_F32` is stronger than exact conversion.  It requires the
@@ -151,8 +183,8 @@ and an invalid operation may choose a different default on x86 and ARM, while
 the crate promises its positive `NAN` for arithmetic.  `from_fpu` replaces any
 hardware NaN with that one encoding; ordinary values, signed zero, infinities
 and subnormals pass through bit for bit.  `from_f32` separately preserves the
-input NaN's sign while canonicalizing its payload, as every conversion here
-does.
+input NaN's sign while canonicalizing its payload, as every conversion into a
+minifloat does.
 
 On targets that lower this route to hardware `f32` instructions, it follows the
 target's rounding mode and DAZ/FTZ settings.  Rust's float semantics assume the

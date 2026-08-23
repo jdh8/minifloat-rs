@@ -240,14 +240,14 @@ as the gate.
 
 The comparisons *are* timed there for their own sake: `partial_cmp` and
 `total_cmp` have rows on the same four shapes, and that is where a change to
-them gets measured.  The converters have no route of their own: they ride the
-hardware arm of
-`benches/arith.rs`, whose every `f32` row is
-`from_f32(x.to_f32() op y.to_f32())`, so a conversion regression does show up
-there &mdash; mixed with the operator, which is the limitation and the reason a
-standalone route will eventually be worth building.  It gets built by the round
-that first optimizes a converter for a shape that is not already a host float,
-not before.
+them gets measured.  `benches/from_f32.rs` and `benches/to_f32.rs` time the
+matching-field route on `BF16` and `BF20` against the generic conversion in the
+same binary.  Within each target, both rows consume the same 1024 deterministic,
+representation-uniform inputs, so special values and subnormals occur at their
+natural density and neither row wins by drawing an easier sample.  The
+converters still ride the hardware arm of `benches/arith.rs` too, but those rows
+mix conversion with an operator and are corroboration rather than the converter
+measurement.
 
 The `E8M23` host-float route made `from_f32` and `to_f32` bit operations, which
 need no standalone timing target.  On 2026-08-23, a dependent `-O3` probe at
@@ -255,14 +255,10 @@ baseline x86-64, rustc 1.98.0 with LLVM 22.1.8, counted `from_f32` at 99
 instructions in benchmark-only parent `79dcb9e` and 9 in this direct-route
 commit, and `to_f32` at 25 before and 2 after, with no calls after.  That settles
 the converter half of this round by the rule in “When the benchmark cannot see
-it”; the operator half is timed, and the first non-host-float converter
-optimization still owes the standalone route above.
-
-When that round comes, the shape to copy is the Rust sibling,
-[`jdh8/metallic-rs`](https://github.com/jdh8/metallic-rs): one bench file per
-function over a shared harness, the competing implementations as sibling
-criterion rows *in the same binary*, and the input distribution declared rather
-than left implicit.
+it”; the operator half is timed.  The standalone targets above follow the shape
+of the Rust sibling, [`jdh8/metallic-rs`](https://github.com/jdh8/metallic-rs):
+one bench file per function over a shared harness, competing implementations as
+sibling criterion rows in the same binary, and an explicit input distribution.
 
 The budget it will raise is already settled, so do not re-argue it.  An
 exhaustive sweep is affordable: all 2<sup>32</sup> ordered pairs of `F16` and

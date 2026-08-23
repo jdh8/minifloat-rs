@@ -77,6 +77,14 @@ fn test_to_floats() {
 }
 
 #[test]
+fn test_shared_exponent_conversion_preserves_bits() {
+    minifloat!(struct E11M4(u16): 11, 4);
+
+    assert_eq!(BF16::from_bits(0xff81).to_f32().to_bits(), 0xff81_0000);
+    assert_eq!(E11M4::from_bits(0xfff1).to_f64().to_bits(), 0xfff1_0000_0000_0000);
+}
+
+#[test]
 fn test_has_exact_conversion_consts() {
     const _: () = assert!(F16::HAS_EXACT_F32_CONVERSION);
     const _: () = assert!(F16::HAS_EXACT_F64_CONVERSION);

@@ -6,7 +6,7 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! The operand source both bench targets draw from
+//! The minifloat operand source shared by the benchmark targets
 //!
 //! Sharing it is what makes the two comparable: an A/B build differs in the
 //! crate under test, never in how the operands were drawn.

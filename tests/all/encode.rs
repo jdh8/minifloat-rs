@@ -7,7 +7,7 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::support::*;
-use minifloat::{detail::decompose, Format, Minifloat};
+use minifloat::{detail::decompose, Format, Minifloat, BF16};
 
 use core::cmp::Ordering;
 use core::fmt::Debug;
@@ -257,4 +257,17 @@ fn test_encode_random_sweep() {
     }
     test_most_8_bits(CheckSweep);
     test_wide_shapes(CheckSweep);
+}
+
+#[test]
+fn test_bf16_f32_fast_path_matches_generic() {
+    for bits in 0..=u32::MAX {
+        let x = f32::from_bits(bits);
+        let expected = if x.is_nan() {
+            BF16::from_bits(BF16::NAN.to_bits() | ((bits >> 16) as u16 & 0x8000))
+        } else {
+            BF16::from_f64(f64::from(x))
+        };
+        assert_eq!(BF16::from_f32(x).to_bits(), expected.to_bits(), "{bits:#010x}");
+    }
 }

@@ -109,7 +109,9 @@ yourself still means all-ones-is-NaN, and still has a maximum of 4.
 
 - **Bit-exact storage is the public contract.**  All representations are
   inspected via `to_bits` / `from_bits`.  NaN sign bits are preserved through
-  conversions where the encoding allows.
+  conversions where the encoding allows.  Conversions into a minifloat
+  canonicalize NaN payloads; conversion back to a host float preserves a stored
+  payload when their exponent fields match.
 
 - **No `num_traits::Float`.**  `Finite`, `FN`, and `FNUZ` lack infinities;
   `Finite` also lacks NaN and `FNUZ` lacks &minus;0.  The crate exposes its own
