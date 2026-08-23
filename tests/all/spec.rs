@@ -134,10 +134,9 @@ fn test_max_10_exp() {
 
 /// `DIGITS` and `MIN_10_EXP`, in both spellings
 ///
-/// Both are float math truncated to an integer under an `#[allow]`, and the
-/// truncation is what has to be right: toward zero is `floor` for `DIGITS`,
-/// which is non-negative, and `ceil` for `MIN_10_EXP`, which is not.  Until
-/// this test nothing in the suite reached either one.
+/// `DIGITS` can truncate because its input is non-negative.  `MIN_10_EXP`
+/// needs a true ceiling; these generated types exercise its negative side.
+/// Until this test nothing in the suite reached either one.
 #[test]
 fn test_decimal_digits() {
     // `BF16` has `f32`'s exponent range exactly, so the standard library

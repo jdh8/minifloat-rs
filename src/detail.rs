@@ -59,9 +59,18 @@ pub const fn decompose(x: f64) -> (u64, i32) {
 /// shift that widens is the caller's own doing &mdash; `from_parts` shifts up
 /// only to put the significand's top bit where the format keeps it, so the
 /// result is under 2<sup><var>M</var>+1</sup>, at most 2<sup>30</sup>.
+///
+/// `parity_offset` maps the retained bit's parity to the destination code's.
+/// It matters only when the format has no mantissa bit, where the code's low
+/// bit is the exponent field's and the significand is always 1.
 #[must_use]
 #[inline]
-pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64 {
+pub const fn round_to_scale(
+    significand: u64,
+    exponent: i32,
+    target: i32,
+    parity_offset: bool,
+) -> i64 {
     let shift = target - exponent;
 
     if shift <= 0 {
@@ -73,7 +82,8 @@ pub const fn round_to_scale(significand: u64, exponent: i32, target: i32) -> i64
     let dropped = significand & ((1 << shift) - 1);
     let kept = significand >> shift;
     let half = 1 << (shift - 1);
-    (kept + (dropped > half || dropped == half && kept & 1 != 0) as u64).cast_signed()
+    let odd = (kept & 1 != 0) != parity_offset;
+    (kept + (dropped > half || dropped == half && odd) as u64).cast_signed()
 }
 
 /// log<sub>2</sub>(1 &minus; 2<sup>&minus;`p`</sup>) indexed by precision `p`

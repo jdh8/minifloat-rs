@@ -191,9 +191,13 @@ pub trait Minifloat:
     ///
     /// Equal to ceil(log<sub>10</sub>([`MIN_POSITIVE`][Self::MIN_POSITIVE]))
     // A decimal exponent of a minifloat.  Float-to-int in const has no
-    // `try_from`.
+    // `try_from`, and truncation is a ceiling only below zero.
     #[allow(clippy::cast_possible_truncation)]
-    const MIN_10_EXP: i32 = ((Self::MIN_EXP - 1) as f64 * crate::LOG10_2) as i32;
+    const MIN_10_EXP: i32 = {
+        let value = (Self::MIN_EXP as f64 - 1.0) * crate::LOG10_2;
+        let truncated = value as i32;
+        truncated + ((truncated as f64) < value) as i32
+    };
 
     /// Whether every value of this type is exactly representable as [`f32`]
     ///
@@ -996,13 +1000,24 @@ macro_rules! __minifloat {
                     // Subnormal numbers all share the ULP of the smallest one,
                     // so their code *is* the rounded multiple of that ULP.
                     $crate::detail::round_to_scale(
-                        significand, exponent, Self::MIN_EXP - 1 - Self::M.cast_signed())
+                        significand,
+                        exponent,
+                        Self::MIN_EXP - 1 - Self::M.cast_signed(),
+                        false,
+                    )
                 } else {
                     // Rounding to `MANTISSA_DIGITS` may carry into the implicit
                     // bit.  That lands on the next exponent field with a zero
                     // mantissa, which is exactly where the extra ULP belongs.
+                    // With no mantissa bit, the exponent field supplies the
+                    // destination code's parity instead.
+                    let parity_offset = Self::M == 0 && (e + Self::B) % 2 == 0;
                     let rounded = $crate::detail::round_to_scale(
-                        significand, exponent, e - Self::M.cast_signed());
+                        significand,
+                        exponent,
+                        e - Self::M.cast_signed(),
+                        parity_offset,
+                    );
                     (i64::from(e + Self::B) << Self::M) + rounded - (1 << Self::M)
                 };
 

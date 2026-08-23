@@ -160,6 +160,14 @@ fn test_compound_assignment() {
     assert_eq!(x.to_f64(), 1.5);
 }
 
+#[test]
+fn test_zero_mantissa_ties_to_even() {
+    minifloat!(struct E4M0FN(u8): 4, 0, 8, FN);
+
+    // Code 2 + code 1 is halfway between even code 2 and code 3.
+    assert_eq!((E4M0FN::from_bits(2) + E4M0FN::from_bits(1)).to_bits(), 2);
+}
+
 /// The wide roster against an `f64` round trip, wherever `f64` may referee
 ///
 /// The rule is `route`'s, not just exactness: an `f64` intermediate needs
