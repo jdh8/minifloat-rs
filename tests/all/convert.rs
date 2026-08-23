@@ -84,6 +84,68 @@ fn test_shared_exponent_conversion_preserves_bits() {
     assert_eq!(E11M4::from_bits(0xfff1).to_f64().to_bits(), 0xfff1_0000_0000_0000);
 }
 
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn test_exact_conversions_ignore_flush_to_zero() {
+    minifloat!(struct F(u32): 7, 23, 120, FN);
+    minifloat!(struct D(u16): 10, 1, 1023, FN);
+    minifloat!(struct I(u32): 7, 23, 127, FN);
+
+    unsafe fn set_mxcsr(value: u32) {
+        unsafe {
+            core::arch::asm!(
+                "ldmxcsr [{value}]",
+                value = in(reg) &value,
+                options(nostack, preserves_flags),
+            );
+        }
+    }
+    struct RestoreMxcsr(u32);
+    impl Drop for RestoreMxcsr {
+        fn drop(&mut self) {
+            unsafe { set_mxcsr(self.0) };
+        }
+    }
+
+    let mut saved = 0;
+    unsafe {
+        core::arch::asm!(
+            "stmxcsr [{saved}]",
+            saved = in(reg) &mut saved,
+            options(nostack, preserves_flags),
+        );
+        set_mxcsr(saved | 1 << 15 | 1 << 6);
+    }
+    let restore = RestoreMxcsr(saved);
+    let actual = (
+        F::from_bits(core::hint::black_box(1)).to_f32().to_bits(),
+        F::from_bits(core::hint::black_box(0x4000_0001))
+            .to_f32()
+            .to_bits(),
+        F::from_bits(core::hint::black_box(0x4000_0000))
+            .to_f32()
+            .to_bits(),
+        F::from_bits(core::hint::black_box(0x007f_ffff))
+            .to_f32()
+            .to_bits(),
+        D::from_bits(core::hint::black_box(1)).to_f64().to_bits(),
+        I::from_f32(f32::from_bits(core::hint::black_box(1))).to_bits(),
+    );
+    drop(restore);
+
+    assert_eq!(
+        actual,
+        (
+            0x0000_0080,
+            0x8000_0080,
+            0x8000_0000,
+            0x03ff_fffe,
+            0x0008_0000_0000_0000,
+            1,
+        ),
+    );
+}
+
 #[test]
 fn test_has_exact_conversion_consts() {
     const _: () = assert!(F16::HAS_EXACT_F32_CONVERSION);

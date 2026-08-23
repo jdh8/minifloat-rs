@@ -90,11 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bias any `E` up to 15 passes.  Nothing that compiled before is rejected: no
   16-bit shape could reach an `i16` wrap, since `MAX_EXP >= 1` already forces
   the bias down.
-- `to_f32`'s subnormal branch scales in `f64` and casts once, since `f32::from`
-  has no `u32` impl.  The product is an `f32` value, so the cast rounds nothing;
-  that is what `HAS_EXACT_F32_CONVERSION` guarantees.  Its exact normal branch
-  shifts by a `saturating_sub`, which keeps the expression total for a shape
-  whose precision overruns `f32`'s and which never takes the branch.
 - `test_arithmetic_16bit_sampled` is `test_arithmetic_wide_sampled` and gates on
   `route`'s rule rather than on exactness alone: past 2<var>p</var> + 2 = 53 the
   `f64` operation itself double-rounds where the shape does not, so `E6M25` and
@@ -102,6 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test_arithmetic_correctly_rounded_16bit` is `_wide` and draws 2<sup>12</sup>
   pairs with a subnormal left operand on top of its 2<sup>16</sup> uniform
   ones, which is the case the normalised dividend exists for.
+
+### Fixed
+
+- Exact `to_f32` and `to_f64` conversions now construct host fields directly
+  for a stored subnormal, and generic `from_f32` decodes a subnormal input's
+  fraction field instead of widening it.  Host arithmetic could let FTZ or DAZ
+  turn these exactly representable values into zero.
 
 ## [0.3.0] &mdash; 2026-08-22
 

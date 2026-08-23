@@ -939,7 +939,18 @@ macro_rules! __minifloat {
                     let bias = (1 << (shift - 1)) - 1 + ((bits >> shift) & 1);
                     return Self::from_bits(((bits + bias) >> shift) as $bits);
                 }
-                // Widening to `f64` is exact, so this still rounds only once.
+                // A hardware widening can inherit DAZ and erase a subnormal;
+                // its fraction field is already the exact significand.
+                if x.is_subnormal() {
+                    let significand = u64::from(
+                        x.to_bits() & ((1 << (f32::MANTISSA_DIGITS - 1)) - 1));
+                    return Self::from_parts(
+                        x.is_sign_negative(),
+                        significand,
+                        f32::MIN_EXP - f32::MANTISSA_DIGITS.cast_signed());
+                }
+                // Every other `f32` reaches the existing `f64` route without
+                // an intermediate rounding.
                 Self::from_f64(f64::from(x))
             }
 
@@ -1117,6 +1128,44 @@ macro_rules! __minifloat {
                 if value.is_nan() { Self::INVALID } else { value }
             }
 
+            /// Re-encode a finite magnitude in an exact host float's fields
+            ///
+            /// The caller guarantees the destination holds the source's full
+            /// precision and exponent range, which makes every shift
+            /// non-negative and the result fit the destination.
+            #[inline]
+            fn exact_magnitude_bits(
+                magnitude: $bits,
+                dst_mantissa_digits: u32,
+                dst_min_exp: i32,
+            ) -> u64 {
+                let magnitude = u64::from(magnitude);
+                if magnitude == 0 {
+                    return 0;
+                }
+                if magnitude >= 1 << Self::M {
+                    let shifted = magnitude << (dst_mantissa_digits - Self::MANTISSA_DIGITS);
+                    let rebias = u64::from(
+                        (Self::MIN_EXP - dst_min_exp).cast_unsigned())
+                        << (dst_mantissa_digits - 1);
+                    return shifted + rebias;
+                }
+
+                let leading = magnitude.ilog2();
+                let ulp = Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed();
+                let exponent = ulp + leading.cast_signed();
+                if exponent < dst_min_exp - 1 {
+                    let shift = (ulp - dst_min_exp
+                        + dst_mantissa_digits.cast_signed()).cast_unsigned();
+                    return magnitude << shift;
+                }
+                let shifted = magnitude << (dst_mantissa_digits - 1 - leading);
+                let rebias = u64::from(
+                    (exponent - dst_min_exp + 1).cast_unsigned())
+                    << (dst_mantissa_digits - 1);
+                shifted + rebias
+            }
+
             /// Best effort conversion to [`f64`]
             ///
             /// This is exact unless the exponent leaves [`f64`]'s range, where
@@ -1143,22 +1192,11 @@ macro_rules! __minifloat {
                 let field = magnitude >> Self::M;
 
                 if Self::HAS_EXACT_F64_CONVERSION {
-                    // A shape that fits needs no rounding at all: a subnormal is
-                    // its code times the ULP, exactly, and a normal value is its
-                    // own bits with the exponent field rebiased.  Every
-                    // expression here stays total for the shapes that never take
-                    // this branch, whose rebias is negative.
-                    if field == 0 {
-                        let scale = $crate::detail::exp2i(
-                            Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed());
-                        return f64::from(magnitude) * scale.copysign(sign);
-                    }
-                    let shifted =
-                        u64::from(magnitude) << (f64::MANTISSA_DIGITS - Self::MANTISSA_DIGITS);
-                    let rebias =
-                        ((Self::MIN_EXP - f64::MIN_EXP) as u64) << (f64::MANTISSA_DIGITS - 1);
+                    // A shape that fits needs no rounding or FP arithmetic.
+                    let magnitude = Self::exact_magnitude_bits(
+                        magnitude, f64::MANTISSA_DIGITS, f64::MIN_EXP);
                     let sign_bit = u64::from(self.is_sign_negative()) << (u64::BITS - 1);
-                    return f64::from_bits(sign_bit | (shifted + rebias));
+                    return f64::from_bits(sign_bit | magnitude);
                 }
 
                 let (significand, exponent) = if field == 0 {
@@ -1199,32 +1237,19 @@ macro_rules! __minifloat {
                 }
 
                 if Self::HAS_EXACT_F32_CONVERSION {
-                    // Same reassembly as `to_f64`, one size down; see there for
-                    // why nothing rounds.  The shift saturates so it stays
-                    // total for the wider shapes, whose `MANTISSA_DIGITS`
-                    // overruns `f32`'s and which never reach this branch.
                     if self.is_infinite() {
                         return f32::INFINITY * sign;
                     }
-                    let magnitude = self.to_bits() & Self::ABS_MASK;
-                    if magnitude >> Self::M == 0 {
-                        // Scaling in `f64` is what spares this branch a
-                        // `f32::from`, which `u32` storage does not have.  The
-                        // product is an `f32` value, so the cast rounds
-                        // nothing; that is what `HAS_EXACT_F32_CONVERSION`
-                        // guarantees.
-                        let scale = $crate::detail::exp2i(
-                            Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed(),
-                        );
-                        #[allow(clippy::cast_possible_truncation)]
-                        return (f64::from(magnitude) * scale.copysign(f64::from(sign))) as f32;
-                    }
-                    let shifted = u32::from(magnitude)
-                        << f32::MANTISSA_DIGITS.saturating_sub(Self::MANTISSA_DIGITS);
-                    let rebias =
-                        ((Self::MIN_EXP - f32::MIN_EXP) as u32) << (f32::MANTISSA_DIGITS - 1);
+                    // Same exact field construction as `to_f64`, one size down.
+                    // The result provably fits; `TryFrom` is unnecessary here.
+                    #[allow(clippy::cast_possible_truncation)]
+                    let magnitude = Self::exact_magnitude_bits(
+                        self.to_bits() & Self::ABS_MASK,
+                        f32::MANTISSA_DIGITS,
+                        f32::MIN_EXP,
+                    ) as u32;
                     let sign_bit = u32::from(self.is_sign_negative()) << (u32::BITS - 1);
-                    return f32::from_bits(sign_bit | (shifted + rebias));
+                    return f32::from_bits(sign_bit | magnitude);
                 }
 
                 // Conversion to `f64` is exact but for exponents out of its
