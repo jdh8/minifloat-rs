@@ -16,7 +16,7 @@ use minifloat::Minifloat;
 /// Operand pairs one measurement runs over
 ///
 /// Small enough to stay in L1, so the loop times the crate and not memory.
-pub(crate) const PAIRS: usize = 1 << 10;
+pub const PAIRS: usize = 1 << 10;
 
 /// Deterministic pseudo-random source
 ///
@@ -26,7 +26,7 @@ pub(crate) const PAIRS: usize = 1 << 10;
 struct Lcg(u64);
 
 impl Lcg {
-    fn next(&mut self) -> u32 {
+    const fn next(&mut self) -> u32 {
         self.0 = self
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
@@ -41,15 +41,17 @@ impl Lcg {
 /// have in the format, which is the mix an operator or a predicate has to
 /// survive.  Both routes of a comparison then run over the very same pairs; a
 /// unary predicate reads the left operand of each.
-pub(crate) fn pairs<T: Minifloat>() -> Vec<(T, T)>
+pub fn pairs<T: Minifloat>() -> Vec<(T, T)>
 where
     T::Bits: TryFrom<u32>,
 {
     let mut lcg = Lcg(0x0FED_CBA9_8765_4321);
     let mask = u32::MAX >> (u32::BITS - T::BITWIDTH);
-    let mut draw = || match (lcg.next() & mask).try_into() {
-        Ok(bits) => T::from_bits(bits),
-        Err(_) => unreachable!("a minifloat is narrower than its storage"),
+    let mut draw = || {
+        (lcg.next() & mask).try_into().map_or_else(
+            |_| unreachable!("a minifloat is narrower than its storage"),
+            T::from_bits,
+        )
     };
     (0..PAIRS).map(|_| (draw(), draw())).collect()
 }

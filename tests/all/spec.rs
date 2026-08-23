@@ -121,7 +121,6 @@ fn test_max_10_exp() {
     minifloat!(struct E4M0FN(u8): 4, 0, 8, FN);
     const _: () = assert!(E4M0FN::MAX_EXP == 7);
     const _: () = assert!(E4M0FN::MAX_10_EXP == 1);
-    assert_eq!(E4M0FN::MAX.to_f64(), 64.0);
 
     const _: () = assert!(F16::MAX_10_EXP == 4);
     const _: () = assert!(BF16::MAX_10_EXP == 38);
@@ -129,6 +128,8 @@ fn test_max_10_exp() {
     const _: () = assert!(F8E4M3FN::MAX_10_EXP == 2);
     const _: () = assert!(F4E2M1FN::MAX_10_EXP == 0);
     const _: () = assert!(F6E3M2FN::MAX_10_EXP == 1);
+
+    assert_eq!(E4M0FN::MAX.to_f64(), 64.0);
 }
 
 /// `DIGITS` and `MIN_10_EXP`, in both spellings

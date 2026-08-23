@@ -18,7 +18,7 @@ use core::fmt::Debug;
 /// both operands here routinely sit outside [`f64`]'s range.  The significands
 /// are [`u128`] because an exact sum of two operands needs more room than
 /// either of them.
-pub(crate) fn cmp_scaled(a: (u128, i32), b: (u128, i32)) -> Ordering {
+pub fn cmp_scaled(a: (u128, i32), b: (u128, i32)) -> Ordering {
     if a.0 == 0 || b.0 == 0 {
         return a.0.cmp(&b.0);
     }
@@ -43,7 +43,7 @@ pub(crate) fn cmp_scaled(a: (u128, i32), b: (u128, i32)) -> Ordering {
 /// This is the textbook decoding [`reference_round`] uses, kept exact and
 /// extended one code past the maximum so the overflow boundary has a candidate
 /// of its own.
-pub(crate) fn code_value<T: Minifloat>(code: Mask) -> (u64, i32) {
+pub const fn code_value<T: Minifloat>(code: Mask) -> (u64, i32) {
     let field = code >> T::M;
     let fraction = code & bit_mask(T::M);
 
@@ -78,7 +78,7 @@ fn huge_and_max<T: Minifloat>() -> (Mask, Mask) {
 /// can hold, so an exact sum, product, or quotient can referee itself.
 ///
 /// Ties go to the even code and overflow to `HUGE`.
-pub(crate) fn reference_round<T: Minifloat>(
+pub fn reference_round<T: Minifloat>(
     negative: bool,
     cmp: impl Fn((u64, i32)) -> Ordering,
 ) -> T
@@ -131,7 +131,7 @@ where
 /// `arith.rs` is where independence is load-bearing, and it never touches an
 /// `f64` at all.  Ties go to the even code, overflow to `HUGE`, and a NaN to
 /// the format's NaN pattern (or to &plusmn;`MAX` where the format has none).
-pub(crate) fn reference_encode<T: Minifloat>(x: f64) -> T
+pub fn reference_encode<T: Minifloat>(x: f64) -> T
 where
     T::Bits: TryFrom<Mask>,
 {

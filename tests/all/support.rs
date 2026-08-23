@@ -17,10 +17,10 @@ use core::hash::Hash;
 /// Bitmask returned by [`bit_mask`]
 ///
 /// This type must be an unsigned integer.
-pub(crate) type Mask = u64;
+pub type Mask = u64;
 
 /// Create a bitmask of the given width
-pub(crate) const fn bit_mask(width: u32) -> Mask {
+pub const fn bit_mask(width: u32) -> Mask {
     assert!(width <= Mask::BITS);
 
     if width == 0 {
@@ -33,14 +33,12 @@ pub(crate) const fn bit_mask(width: u32) -> Mask {
 /// Narrow a bit pattern to a minifloat's storage
 ///
 /// A minifloat is at most 32 bits wide, so the conversion always succeeds.
-pub(crate) fn narrow<T: Minifloat>(bits: Mask) -> T::Bits
+pub fn narrow<T: Minifloat>(bits: Mask) -> T::Bits
 where
     T::Bits: TryFrom<Mask>,
 {
-    match bits.try_into() {
-        Ok(narrowed) => narrowed,
-        Err(_) => unreachable!("a minifloat is narrower than its storage"),
-    }
+    bits.try_into()
+        .unwrap_or_else(|_| unreachable!("a minifloat is narrower than its storage"))
 }
 
 /// Stride that keeps a sweep of `T`'s bit patterns near a million
@@ -48,12 +46,12 @@ where
 /// Exhaustive through 20 bits, where a shape has a million codes or fewer.
 /// Above that the stride is odd, so a sweep still visits every low-bit
 /// pattern and hence every tie parity.
-pub(crate) fn code_stride<T: Minifloat>() -> usize {
+pub const fn code_stride<T: Minifloat>() -> usize {
     (1usize << T::BITWIDTH.saturating_sub(20)) | 1
 }
 
 /// Every bit pattern of `T`, sampled at [`code_stride`]
-pub(crate) fn codes<T: Minifloat>() -> impl Iterator<Item = Mask> {
+pub fn codes<T: Minifloat>() -> impl Iterator<Item = Mask> {
     (0..=bit_mask(T::BITWIDTH)).step_by(code_stride::<T>())
 }
 
@@ -62,14 +60,14 @@ pub(crate) fn codes<T: Minifloat>() -> impl Iterator<Item = Mask> {
 /// This is necessary because NaN != NaN in C++.  We also want to differentiate
 /// -0 from +0.  Using this functor, NaNs are considered identical to each
 /// other, while +0 and -0 are considered different.
-pub(crate) const fn same_f32(x: f32, y: f32) -> bool {
+pub const fn same_f32(x: f32, y: f32) -> bool {
     x.to_bits() == y.to_bits() || x.is_nan() && y.is_nan()
 }
 
 /// Test floating-point identity like Object.is in JavaScript
 ///
 /// See also [`same_f32`].
-pub(crate) const fn same_f64(x: f64, y: f64) -> bool {
+pub const fn same_f64(x: f64, y: f64) -> bool {
     x.to_bits() == y.to_bits() || x.is_nan() && y.is_nan()
 }
 
@@ -78,7 +76,7 @@ pub(crate) const fn same_f64(x: f64, y: f64) -> bool {
 /// Splitting the scale keeps either factor within [`f64`]'s exponent range, so
 /// the first product is exact and the second rounds at most once.  A single
 /// `exp2` would flush to zero or to infinity long before the product does.
-pub(crate) fn scaled(significand: f64, exponent: i32) -> f64 {
+pub fn scaled(significand: f64, exponent: i32) -> f64 {
     let head = exponent.clamp(f64::MIN_EXP - 1, f64::MAX_EXP - 1);
     significand * f64::exp2(f64::from(head)) * f64::exp2(f64::from(exponent - head))
 }
@@ -86,12 +84,12 @@ pub(crate) fn scaled(significand: f64, exponent: i32) -> f64 {
 /// Test floating-point identity like Object.is in JavaScript
 ///
 /// See also [`same_f32`].
-pub(crate) fn same_mini<T: Minifloat>(x: T, y: T) -> bool {
+pub fn same_mini<T: Minifloat>(x: T, y: T) -> bool {
     x.to_bits() == y.to_bits() || x.is_nan() && y.is_nan()
 }
 
 /// Iterate over all representations of a minifloat type
-pub(crate) fn for_all<T: Minifloat>(f: impl Fn(T) -> bool) -> bool
+pub fn for_all<T: Minifloat>(f: impl Fn(T) -> bool) -> bool
 where
     T::Bits: TryFrom<Mask>,
 {
@@ -102,7 +100,7 @@ where
 ///
 /// This trait helps building generic test infrastructure.  Opposed to generic
 /// functions, traits can work as parameters.
-pub(crate) trait Check {
+pub trait Check {
     /// Check properties of a minifloat type
     fn check<T: Minifloat + Debug + Hash>() -> bool
     where
@@ -114,7 +112,7 @@ pub(crate) trait Check {
 /// The 4- and 6-bit shapes first, then the 8-bit ones.  A caller that wants
 /// only the wide shapes calls [`test_wide_shapes`] instead; every caller that
 /// wants the narrow ones wants all of them.
-pub(crate) fn test_most_8_bits<T: Check>(_: T) {
+pub fn test_most_8_bits<T: Check>(_: T) {
     minifloat!(struct F6E2M3(u8): 2, 3);
     minifloat!(struct F6E2M3FNUZ(u8): 2, 3, FNUZ);
 
@@ -210,7 +208,7 @@ pub(crate) fn test_most_8_bits<T: Check>(_: T) {
 /// | `2, 29, FNUZ` | a non-IEEE format through the `u32` arms |
 ///
 /// The 32-bit shapes are sampled rather than walked; [`codes`] says how.
-pub(crate) fn test_wide_shapes<T: Check>(_: T) {
+pub fn test_wide_shapes<T: Check>(_: T) {
     minifloat!(struct E11M4(u16): 11, 4);
     minifloat!(struct E12M3(u16): 12, 3);
     minifloat!(struct E12M3B1000(u16): 12, 3, (1000), IEEE);
@@ -249,14 +247,14 @@ pub(crate) fn test_wide_shapes<T: Check>(_: T) {
 /// Knuth's MMIX multiplier over a fixed seed: no dependency, and a failure
 /// always reproduces.  Only the high half of the state is handed out, since an
 /// LCG's low bits cycle far too regularly.
-pub(crate) struct Lcg(u64);
+pub struct Lcg(u64);
 
 impl Lcg {
-    pub(crate) const fn new(seed: u64) -> Self {
+    pub const fn new(seed: u64) -> Self {
         Self(seed)
     }
 
-    pub(crate) fn next(&mut self) -> u32 {
+    pub const fn next(&mut self) -> u32 {
         self.0 = self
             .0
             .wrapping_mul(6_364_136_223_846_793_005)

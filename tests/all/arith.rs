@@ -270,7 +270,7 @@ fn exact_sum((xn, (xs, xe)): (bool, (u64, i32)), (yn, (ys, ye)): (bool, (u64, i3
 }
 
 /// Sign and exact magnitude of a bit pattern
-fn operand<T: Minifloat>(bits: Mask) -> (bool, (u64, i32)) {
+const fn operand<T: Minifloat>(bits: Mask) -> (bool, (u64, i32)) {
     (
         bits >> (T::E + T::M) != 0,
         code_value::<T>(bits & bit_mask(T::E + T::M)),

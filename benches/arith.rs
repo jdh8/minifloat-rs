@@ -56,7 +56,7 @@ enum Route {
 /// itself, while `f64` remains an unchanged control for its benchmark row.
 ///
 /// `None` is a shape no hardware float can referee, which the benchmark skips.
-fn route<T: Minifloat>() -> Option<Route> {
+const fn route<T: Minifloat>() -> Option<Route> {
     let digits = 2 * T::MANTISSA_DIGITS + 2;
 
     if T::HAS_EXACT_F32_CONVERSION && digits <= f32::MANTISSA_DIGITS {
