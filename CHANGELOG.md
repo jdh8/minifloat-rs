@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It is the one predefined type outside LLVM's set, and the accumulator format
   et-toolchain's C model does its MAC and SACC arithmetic in.  Like every other
   predefined type it opts into the lossless `From` impls for `f32` and `f64`.
+- `Minifloat::IS_F32`, with an inherent mirror on every generated type.  It is
+  true only for S1E8M23 in the IEEE format with bias 127, whose precision,
+  exponent range and non-finite encodings all match `f32` bit for bit.
 - The test roster formerly called `test_16_bits` is now `test_wide_shapes` and
   carries six `u32` shapes beside the nine 16-bit ones: `BF20`, `E8M22` (the
   last E8 shape `f64` can referee), `E8M23`, `E6M25` (gaps past `ALIGN_CAP` with
@@ -27,15 +30,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   samples: exhaustive through 20 bits, then an odd stride landing near a
   million, odd so every low-bit pattern and hence every tie parity is still
   visited.
-- `test_f32_shape_matches_hardware`, the one arithmetic gate in the suite with
-  no Figueroa caveat: `E8M23` *is* `f32`, so 2<sup>22</sup> pairs of it through
-  all four operators have to land on the FPU's own bits &mdash; the sign of a
-  zero, the ±∞ an overflow or a division by zero produces, and every subnormal
-  result.  `test_f32_shape_matches_core` pins its constants against `core::f32`
-  the same way.
+- `test_f32_shape_matches_hardware`, a 2<sup>22</sup>-pair route gate for
+  `E8M23`.  Signed zero, infinities and subnormals have to land on the FPU's
+  own bits, while NaNs have to return the crate's canonical encoding;
+  deterministic invalid operations cover the latter.  The exact integer
+  oracle independently referees rounding, and `test_f32_shape_matches_core`
+  pins the shape's constants against `core::f32`.
+- The arithmetic benchmark now times `E8M23`'s direct route against an `f64`
+  round trip, adding four operator rows and four control rows to the target.
 
 ### Changed
 
+- `E8M23`'s `from_f32`/`to_f32` conversions and arithmetic now use `f32`
+  directly.  `to_f32` is a bit-cast; `from_f32` preserves a NaN's sign while
+  canonicalizing its payload; `+`, `-`, `*` and `/` wrap the `f32` result and
+  canonicalize every arithmetic NaN to the crate's positive `NAN`.  From
+  `79dcb9e` to `fe5bd18`, measured on 2026-08-23 on an AMD Ryzen 9 7950X3D
+  with rustc 1.98.0 (LLVM 22.1.8) and `-C target-cpu=native`, min across fifteen
+  interleaved passes, after / before is 0.087x for add, 0.098x for sub, 0.144x
+  for mul and 0.365x for div, 0.146x at geomean; 28 unchanged controls span
+  0.981x&ndash;1.029x.  A dependent baseline-x86-64 probe of the same revisions
+  shrinks the four operator bodies to 10 instructions each, `from_f32` from 99
+  to 9, and `to_f32` from 25 to 2, with no calls left after the change.
 - `detail::ALIGN_CAP` is 32, down from 46.  Two bounds fix it: a dropped far
   addend has to round back to the other, which needs the cap to be at least
   <var>p</var> + 1, and the aligned sum has to stay in an `i64`, which needs
@@ -107,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared module, so an A/B build differs in the crate under test and never in
   the inputs.
 - `docs/`, three standing references that outlive the commits they came from:
-  `arithmetic.md` on why every operator rounds once on integer significands and
+  `arithmetic.md` on how every operator reaches its correctly rounded result and
   what the oracle actually covers, `inlining.md` on what a dependent crate gets
   to inline and what rustc already does for free, and `benchmarking.md` on the
   protocol behind every number in this project.  `README.md` links to them.
