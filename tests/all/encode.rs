@@ -7,7 +7,10 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::support::*;
-use minifloat::{detail::decompose, Format, Minifloat, BF16};
+use minifloat::{
+    detail::decompose, minifloat, Format, Minifloat, BF16, F16, F4E2M1FN, F8E4M3, F8E4M3B11FNUZ,
+    F8E4M3FN, F8E5M2FNUZ,
+};
 
 use core::cmp::Ordering;
 use core::fmt::Debug;
@@ -260,14 +263,141 @@ fn test_encode_random_sweep() {
 }
 
 #[test]
-fn test_bf16_f32_fast_path_matches_generic() {
-    for bits in 0..=u32::MAX {
-        let x = f32::from_bits(bits);
-        let expected = if x.is_nan() {
-            BF16::from_bits(BF16::NAN.to_bits() | ((bits >> 16) as u16 & 0x8000))
-        } else {
-            BF16::from_f64(f64::from(x))
-        };
-        assert_eq!(BF16::from_f32(x).to_bits(), expected.to_bits(), "{bits:#010x}");
+fn test_encode_random_sweep_f64() {
+    struct CheckSweep;
+    impl Check for CheckSweep {
+        fn check<T: Minifloat + Debug>() -> bool
+        where
+            T::Bits: TryFrom<Mask>,
+        {
+            let mut lcg = Lcg::new(0x1234_5678_9ABC_DEF0);
+            for _ in 0..1 << 14 {
+                let bits = u64::from(lcg.next()) << 32 | u64::from(lcg.next());
+                let x = f64::from_bits(bits);
+                let expected = reference_encode::<T>(x);
+                let actual = T::from_f64(x);
+                assert!(
+                    actual.to_bits() == expected.to_bits(),
+                    "from_f64({x:e}): got {actual:?}, expected {expected:?}"
+                );
+            }
+            true
+        }
     }
+    test_most_8_bits(CheckSweep);
+    test_wide_shapes(CheckSweep);
+
+    minifloat!(struct E10M3B1019(u16): 10, 3, (1019));
+    minifloat!(struct E10M3B1020(u16): 10, 3, (1020));
+    const {
+        assert!(E10M3B1019::NESTS_IN_F64_EXPONENT);
+        assert!(!E10M3B1020::NESTS_IN_F64_EXPONENT);
+    }
+    assert_eq!(E10M3B1019::from_f64(f64::MIN_POSITIVE).to_bits(), 0);
+    assert_eq!(
+        E10M3B1020::from_f64(f64::from_bits((1u64 << 51) + 1)).to_bits(),
+        1
+    );
+}
+
+fn check_f32_encoding<T: Minifloat>(bits: u32, check_reference: bool)
+where
+    T::Bits: TryFrom<Mask>,
+{
+    let x = f32::from_bits(bits);
+    let expected = if x.is_nan() {
+        let (_, max) = huge_and_max::<T>();
+        let magnitude = match T::FORMAT {
+            Format::Finite => max,
+            Format::IEEE => bit_mask(T::E + 1) << (T::M - 1),
+            Format::FN => bit_mask(T::E + T::M),
+            _ => 1 << (T::E + T::M), // FNUZ
+        };
+        let sign_bit = Mask::from(x.is_sign_negative()) << (T::E + T::M);
+        T::from_bits(narrow::<T>(magnitude | sign_bit))
+    } else {
+        T::from_f64(f64::from(x))
+    };
+    let actual = T::from_f32(x);
+    assert!(
+        actual.to_bits() == expected.to_bits(),
+        "{} disagrees with the expected encoding at f32 bits {bits:#010x}",
+        core::any::type_name::<T>()
+    );
+
+    if check_reference && !x.is_nan() {
+        let reference = reference_encode::<T>(f64::from(x));
+        assert!(
+            actual.to_bits() == reference.to_bits(),
+            "{} disagrees with the oracle at f32 bits {bits:#010x}",
+            core::any::type_name::<T>()
+        );
+    }
+}
+
+#[test]
+fn test_nested_exponent_fast_path_exhaustive() {
+    minifloat!(struct E5M0FN(u8): 5, 0, FN);
+    minifloat!(struct E5M0FNUZ(u8): 5, 0, FNUZ);
+    minifloat!(struct E2M13(u16): 2, 13);
+    minifloat!(struct E6M22FN(u32): 6, 22, FN);
+    minifloat!(struct E7M23(u32): 7, 23);
+    minifloat!(struct E7M3B123(u16): 7, 3, (123));
+    minifloat!(struct E7M3B124(u16): 7, 3, (124));
+
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    std::thread::scope(|scope| {
+        for offset in 0..threads as u32 {
+            scope.spawn(move || {
+                for bits in (offset..=u32::MAX).step_by(threads) {
+                    check_f32_encoding::<BF16>(bits, false);
+                    check_f32_encoding::<F16>(bits, false);
+                    check_f32_encoding::<F8E4M3>(bits, false);
+                    check_f32_encoding::<F8E4M3FN>(bits, false);
+                    check_f32_encoding::<F8E5M2FNUZ>(bits, false);
+                    check_f32_encoding::<F4E2M1FN>(bits, false);
+                }
+            });
+        }
+    });
+
+    for bits in (0..=u32::MAX).step_by(4097) {
+        check_f32_encoding::<BF16>(bits, true);
+        check_f32_encoding::<F16>(bits, true);
+        check_f32_encoding::<F8E4M3>(bits, true);
+        check_f32_encoding::<F8E4M3FN>(bits, true);
+        check_f32_encoding::<F8E5M2FNUZ>(bits, true);
+        check_f32_encoding::<F4E2M1FN>(bits, true);
+        check_f32_encoding::<F8E4M3B11FNUZ>(bits, true);
+        check_f32_encoding::<E5M0FN>(bits, true);
+        check_f32_encoding::<E5M0FNUZ>(bits, true);
+        check_f32_encoding::<E2M13>(bits, true);
+        check_f32_encoding::<E6M22FN>(bits, true);
+        check_f32_encoding::<E7M23>(bits, true);
+        check_f32_encoding::<E7M3B123>(bits, true);
+        check_f32_encoding::<E7M3B124>(bits, true);
+    }
+
+    let half = 1 << (f32::MANTISSA_DIGITS - 2);
+    for sign in [0, 1 << (u32::BITS - 1)] {
+        for field in 1..255 {
+            for fraction in [half - 1, half, half + 1] {
+                let bits = sign | field << (f32::MANTISSA_DIGITS - 1) | fraction;
+                check_f32_encoding::<E5M0FN>(bits, true);
+                check_f32_encoding::<E5M0FNUZ>(bits, true);
+            }
+        }
+    }
+
+    const {
+        assert!(E7M23::NESTS_IN_F32_EXPONENT);
+        assert!(E7M3B123::NESTS_IN_F32_EXPONENT);
+        assert!(!E7M3B124::NESTS_IN_F32_EXPONENT);
+    }
+    check_f32_encoding::<E7M23>(1.5f32.to_bits(), true);
+    assert_eq!(E7M3B123::from_f32(f32::MIN_POSITIVE).to_bits(), 0);
+    assert_eq!(
+        E7M3B124::from_f32(f32::from_bits((1 << 22) + 1)).to_bits(),
+        1
+    );
 }

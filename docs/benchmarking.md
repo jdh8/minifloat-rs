@@ -4,10 +4,10 @@
 checked, pinned physical core, or it means nothing.*
 
 The reference box for measurements through 2026-08-21 was an AMD Ryzen 7 8700F
-(8 cores, 16 threads), Fedora 44, rustc 1.97.1 with LLVM 22.1.8.  The 2026-08-23
-rounds use an AMD Ryzen 9 7950X3D (16 cores, 32 threads), Ubuntu 22.04.5 LTS,
-rustc 1.98.0 with LLVM 22.1.8.  A ratio from a different machine is a different
-claim.
+(8 cores, 16 threads), Fedora 44, rustc 1.97.1 with LLVM 22.1.8.  The
+2026-08-23 through 2026-08-25 rounds use an AMD Ryzen 9 7950X3D (16 cores, 32
+threads), Ubuntu 22.04.5 LTS, rustc 1.98.0 with LLVM 22.1.8.  A ratio from a
+different machine is a different claim.
 
 ## Stop the poker solver first
 
@@ -143,16 +143,21 @@ this change's band.  A null recorded is still worth more than a null dressed up.
 
 ## Corroborate from the other side
 
-`cargo bench` is the second opinion, not the first.  It runs both targets:
+`cargo bench` is the second opinion, not the first.  It runs four targets:
 
 - `benches/arith.rs` — each operator twice over the same operands, once as the
   crate computes it and once the way a caller would fake it.
 - `benches/predicates.rs` — `is_nan`, `classify`, `partial_cmp`, `total_cmp`,
   which have no alternative route and exist to watch whether the bodies reach
   the caller at all.
+- `benches/from_f32.rs` — direct `f32` encoding against the same inputs sent
+  through `from_f64`.
+- `benches/to_f32.rs` — direct `f32` decoding against an exact `f64` round trip.
 
-Both draw their operands from `benches/common/mod.rs`, so an A/B build differs
-in the crate under test and never in the inputs.  Both run a deliberately short
+The arithmetic and predicate targets draw their operands from
+`benches/common/mod.rs`; each conversion target constructs one deterministic
+input set shared by its two rows.  An A/B build therefore differs in the crate
+under test and never in the inputs.  All four run a deliberately short
 criterion window — 200 ms warm-up, 1 s
 measurement, against criterion's 3 s and 5 s defaults.  Each iteration already
 averages 1024 operations, so the estimate settles well inside that; the defaults
@@ -175,7 +180,7 @@ For reference, the predicate side at e06641b (ns per element, one full pass):
 
 ## The published page is a tripwire, not a measurement
 
-Every push to `main` runs both bench targets on one `ubuntu-latest` runner at
+Every push to `main` runs all four bench targets on one `ubuntu-latest` runner at
 `-Ctarget-cpu=x86-64-v3` and pushes the result to
 <https://jdh8.github.io/minifloat-rs/dev/bench/>, one chart per benchmark id,
 via `benchmark-action/github-action-benchmark`.  Nothing on that page is
@@ -240,14 +245,16 @@ as the gate.
 
 The comparisons *are* timed there for their own sake: `partial_cmp` and
 `total_cmp` have rows on the same four shapes, and that is where a change to
-them gets measured.  `benches/from_f32.rs` and `benches/to_f32.rs` time the
-matching-field route on `BF16` and `BF20` against the generic conversion in the
-same binary.  Within each target, both rows consume the same 1024 deterministic,
-representation-uniform inputs, so special values and subnormals occur at their
-natural density and neither row wins by drawing an easier sample.  The
-converters still ride the hardware arm of `benches/arith.rs` too, but those rows
-mix conversion with an operator and are corroboration rather than the converter
-measurement.
+them gets measured.  `benches/to_f32.rs` keeps `BF16` and `BF20`;
+`benches/from_f32.rs` adds `F16`, `F8E4M3`, and `F8E5M2FNUZ` to that pair for
+the nested-exponent route.  Its historical `generic` row now calls the fast
+`from_f64` path on those shapes too; the ID stays for series continuity, so the
+row is a comparator rather than a generic implementation.  Within each target,
+both rows consume the same 1024 deterministic, representation-uniform inputs,
+so special values and subnormals occur at their natural density and neither row
+wins by drawing an easier sample.  The converters still ride the hardware arm
+of `benches/arith.rs` too, but those rows mix conversion with an operator and
+are corroboration rather than the converter measurement.
 
 The `E8M23` host-float route made `from_f32` and `to_f32` bit operations, which
 need no standalone timing target.  On 2026-08-23, a dependent `-O3` probe at

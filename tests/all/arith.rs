@@ -166,6 +166,8 @@ fn test_zero_mantissa_ties_to_even() {
 
     // Code 2 + code 1 is halfway between even code 2 and code 3.
     assert_eq!((E4M0FN::from_bits(2) + E4M0FN::from_bits(1)).to_bits(), 2);
+    // Code 1 times code 7 is halfway between zero and code 1.
+    assert_eq!((E4M0FN::from_bits(1) * E4M0FN::from_bits(7)).to_bits(), 0);
 }
 
 /// The wide roster against an `f64` round trip, wherever `f64` may referee

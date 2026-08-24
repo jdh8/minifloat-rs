@@ -42,6 +42,31 @@ itself once a shape's exponent leaves `f64`'s range.  A shape the target holds
 exactly takes neither.  `to_f32` and `to_f64` reassemble the target's bits and
 round nothing at all.
 
+Normal and subnormal destinations meet in one `from_parts` rounding path.  The
+value exponent is clamped at the first normal row; any deficit extends the
+rounding shift, while the row offset is zero below that boundary.  A carry then
+crosses the subnormal/normal seam in the same contiguous code space as every
+other carry.
+
+In a dependent `-O3` baseline-x86-64 probe, the complete exported `F16`
+multiplication body shrinks from 126 instructions at `67221dd` to 95 with the
+merged path.  In the native arithmetic benchmark, `.text` falls from 3,375,956
+to 3,368,356 bytes.  Across all 128 normalized iteration bodies, the instruction
+count falls from 25,729 to 23,612 and conditional jumps from 2,375 to 2,218;
+the old normal/subnormal paths merge around a clamp.  Some monomorphizations
+lower it branchlessly, but there is no universal version of the C++ sibling's
+`cmov` spelling.
+
+Timing is mixed.  Min across fifteen interleaved passes pinned to CPU 5, the 64
+soft rows have a 0.997x after/before geomean (0.935x&ndash;1.084x), while eight
+unchanged matching-field controls span 0.994x&ndash;1.190x.  Of the 60 soft
+bodies the merge changes, 32 clear that calibration band in the faster
+direction and 28 overlap it; the four unchanged `E8M23` soft rows overlap too.
+The aggregate is a recorded null, not a speed claim.  The eight standalone
+conversion rows that reach `from_parts` have a 1.024x geomean
+(0.950x&ndash;1.111x); their six controls span 0.996x&ndash;1.005x.  Ryzen 9
+7950X3D, rustc 1.98.0 (LLVM 22.1.8), 2026-08-25, `-C target-cpu=native`.
+
 The special cases stopped borrowing `f64`'s at the same time.  An invalid
 operation yields the format's NaN, or `MAX` where the format has none, rather
 than whatever sign the host's default NaN carried — `0 / 0` in a `Finite`
@@ -146,27 +171,72 @@ code into the host layout.  Conversion in drops the unused mantissa bits with
 an integer round-to-nearest-even bias, so no host arithmetic or floating-point
 rounding mode participates.
 
-This is only a conversion route.  A BF shape's `f64` conversions still take the
-generic path, and every narrower shape keeps its integer arithmetic.  Input
-NaNs retain their sign and canonicalize their payload before the rounding bias
-can erase it into infinity; conversion out preserves the stored sign and
-payload because the entire code shifts unchanged.
+This is only a conversion route; every narrower shape keeps its integer
+arithmetic.  Input NaNs retain their sign and canonicalize their payload before
+the rounding bias can erase it into infinity; conversion out preserves the
+stored sign and payload because the entire code shifts unchanged.
 
-The standalone conversion targets put the direct route against the generic one
-in the same binary.  Min across fifteen alternating passes pinned to CPU 5 of a
-Ryzen 9 7950X3D, with sibling 21 free, rustc 1.98.0 (LLVM 22.1.8), 2026-08-24:
+### Nested exponent ranges make conversion a rebase
+
+An exact shape whose `TINY / 2` is at or above the host's least normal value
+takes a second integer route.  Its finite values nest inside the host's normal
+range, so every host subnormal is below that midpoint and rounds to zero.  Every
+remaining input is encoded by rebasing the host exponent field onto the
+destination rows, extending the right shift when that row is
+subnormal, and rounding the whole unsigned code.  Mantissa carry therefore
+walks into the next exponent row without a special case.
+
+The `f32` tier covers `F16`, every predefined 8-bit-and-below shape, and custom
+shapes under the same range bounds, including equal-precision ones.  The `f64`
+tier additionally covers `BF16`, `BF20`, and the wider exact shapes whose
+exponent fields do not match `f64`'s.  Formats reaching past the host, and
+shapes whose `TINY` reaches into its subnormal range, keep the generic
+`decompose` → `from_parts` route.
+Both fast tiers use only integer and bit operations, so DAZ, FTZ, and the host
+rounding mode cannot reach them.
+
+`test_nested_exponent_fast_path_exhaustive` walks all 2<sup>32</sup> `f32`
+patterns through six representative formats, then checks an odd-stride sample
+of the wider/custom-bias and zero-mantissa edges against the independent
+reference encoder.  A separate raw-`u64` random sweep covers the `f64` tier;
+explicit pairs on both sides of each host's subnormal gate pin its boundary.
+
+The same dependent probe puts `F16` `from_f32` at 110 → 39 instructions and
+`from_f64` at 98 → 43; `F8E4M3` moves 109 → 39 and 97 → 43.  `BF16` and `BF20`
+keep their 15-instruction matching-field `from_f32`, while their `from_f64`
+bodies move 98 → 43 and 100 → 44.  Ryzen 9 7950X3D, rustc 1.98.0 (LLVM
+22.1.8), 2026-08-25, no LTO and `-C target-cpu=x86-64`.
+
+The stopwatch agrees.  This is final / merged-rounding-only, min across fifteen
+interleaved passes pinned to CPU 5, with sibling 21 free:
+
+| encoding row | `BF16` | `BF20` | `F16` | `F8E4M3` | `F8E5M2FNUZ` | geomean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| direct `from_f32` | control | control | 0.654x | 0.689x | 0.766x | 0.702x |
+| `from_f64` (`generic` ID) | 0.728x | 0.813x | 0.778x | 0.811x | 0.848x | 0.795x |
+
+All eight affected rows clear the six unchanged controls' 0.998x&ndash;1.003x
+band; together they have a 0.758x geomean.  Ryzen 9 7950X3D, rustc 1.98.0
+(LLVM 22.1.8), 2026-08-25, `-C target-cpu=native`.
+
+The earlier matching-field conversion round put the direct route against the
+then-generic one in the same binary.  Min across fifteen alternating passes
+pinned to CPU 5 of a Ryzen 9 7950X3D, with sibling 21 free, rustc 1.98.0 (LLVM
+22.1.8), 2026-08-24:
 
 | direct / generic | `BF16` | `BF20` |
 | --- | ---: | ---: |
 | `from_f32` | 0.213x | 0.217x |
 | `to_f32` | 0.307x | 0.309x |
 
-For `from_f32`, the generic row is the route this change replaced.  The
-`to_f32` comparator is an exact `f64` round trip, not the previous exact
-reassembly, so that row describes the two routes in the final binary rather
-than an after/before ratio.  A dependent `-O3` baseline-x86-64 probe supplies
-that side without timing noise: `BF20` `from_f32` shrinks from 101 instructions
-to 15 and `to_f32` from 27 to 3; E11M20 `from_f64` shrinks from 94 to 16 and
+For `from_f32`, the `generic` row was the route that matching-field change
+replaced.  Nested `from_f64` encoding now makes that historical benchmark ID a
+misnomer on all five rows; it is retained so the series does not fork.  The
+table predates that second route and is not a current direct / generic
+comparison.  The `to_f32` comparator is an exact `f64` round trip, not the
+previous exact reassembly.  A dependent `-O3` baseline-x86-64 probe supplied
+that side without timing noise: `BF20` `from_f32` shrank from 101 instructions
+to 15 and `to_f32` from 27 to 3; E11M20 `from_f64` shrank from 94 to 16 and
 `to_f64` from 26 to 3.
 
 ### `E8M23` is `f32`, so the crate hands it to the FPU
@@ -186,10 +256,12 @@ and subnormals pass through bit for bit.  `from_f32` separately preserves the
 input NaN's sign while canonicalizing its payload, as every conversion into a
 minifloat does.
 
-On targets that lower this route to hardware `f32` instructions, it follows the
-target's rounding mode and DAZ/FTZ settings.  Rust's float semantics assume the
-default FP environment, so this is not an additional portable guarantee; the
-distinction reaches only a caller already outside `f32`'s contract through FFI.
+Unlike the exact conversion paths above, the arithmetic operation here really
+does reach the FPU.  On targets that lower it to hardware `f32` instructions,
+it follows the target's rounding mode and DAZ/FTZ settings.  Rust's float
+semantics assume the default FP environment, so this is not an additional
+portable guarantee; the distinction reaches only a caller already outside
+`f32`'s contract through FFI.
 
 Measured from benchmark-only parent `79dcb9e` to this direct-route commit on
 2026-08-23 on an AMD Ryzen 9 7950X3D with rustc 1.98.0 (LLVM 22.1.8) and
@@ -410,6 +482,18 @@ The native build shows that LLVM can pair the work when AVX-512 is available;
 the crate's baseline and x86-64-v3 targets do not.  No code follows from a
 disassembly result: whether the wider instructions win is a timing question
 for a later round.
+
+**Branchless selects for every exact conversion were not ported.**  The C++
+sibling tried that spelling in `9bfa044`; its Clang build regressed to 1.513x
+despite GCC improving to 0.897x.  Rust uses LLVM too, and Clang's unconditional
+subnormal renormalization is the route that regressed.
+
+**Lossy outbound integer-field rounding was not ported.**  The C++ sibling's
+`195090c` wins were confined to E12M3-class outputs.  Those shapes are
+test-local here, while the E11-to-`f32` shape Rust does share corresponds to
+the route that regressed 2.2&ndash;3.3x there.  The existing exact and
+matching-field outbound paths are already shifts; keep the generic fallback
+until a dependent profile contains the one class it helps.
 
 ## How the subtraction change was checked
 

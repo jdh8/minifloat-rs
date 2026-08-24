@@ -6,10 +6,10 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! Direct `f32` encoding against the generic `f64` route
+//! Direct `f32` encoding against the same inputs routed through `f64`
 
 use criterion::{BenchmarkId, Criterion, Throughput};
-use minifloat::{BF16, BF20};
+use minifloat::{BF16, BF20, F16, F8E4M3, F8E5M2FNUZ};
 
 use core::hint::black_box;
 use core::time::Duration;
@@ -40,6 +40,7 @@ macro_rules! bench_shapes {
                 }
             });
         });
+        // The historical ID stays stable even when `from_f64` has a fast path.
         group.bench_function(BenchmarkId::from_parameter("generic"), |bencher| {
             bencher.iter(|| {
                 for &x in &inputs {
@@ -53,7 +54,7 @@ macro_rules! bench_shapes {
 }
 
 fn bench_from_f32(criterion: &mut Criterion) {
-    bench_shapes! { criterion, BF16 BF20 }
+    bench_shapes! { criterion, BF16 BF20 F16 F8E4M3 F8E5M2FNUZ }
 }
 
 criterion::criterion_group! {

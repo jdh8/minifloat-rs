@@ -38,9 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pins the shape's constants against `core::f32`.
 - The arithmetic benchmark now times `E8M23`'s direct route against an `f64`
   round trip, adding four operator rows and four control rows to the target.
-- Standalone `from_f32` and `to_f32` benchmarks time `BF16` and `BF20`'s direct
-  conversion against the generic route in the same binary over identical,
-  representation-uniform inputs.
+- Standalone `from_f32` benchmarks time `BF16`, `BF20`, `F16`, `F8E4M3`, and
+  `F8E5M2FNUZ` over identical, representation-uniform inputs.  The `to_f32`
+  target keeps its `BF16` and `BF20` rows.
+- An exhaustive threaded test checks all 2<sup>32</sup> `f32` patterns across
+  representative nested-exponent formats, backed by an independent oracle
+  sample and a raw-`u64` random sweep for `f64`.  `detail::exp2i` also has a
+  direct test spanning each of its normal, subnormal, zero, and infinity
+  regimes.
 
 ### Changed
 
@@ -56,6 +61,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a Ryzen 9 7950X3D.  A dependent baseline-x86-64 probe shrinks BF20's two
   conversion bodies from 101/27 instructions to 15/3, and E11M20's from 94/26
   to 16/3.
+- Exact narrow host inputs whose finite range nests above the host's subnormal
+  range now encode by rebasing and rounding their integer fields.  This covers
+  `F16` and the predefined 8-bit shapes from `f32`, and additionally `BF16`,
+  `BF20`, and wider exact shapes from `f64`; other shapes keep the generic
+  route.  The integer rounding core now handles normal and subnormal
+  destinations in one clamped path.  Min across fifteen interleaved native
+  passes, the eight affected conversion rows cost 0.654x&ndash;0.848x of the
+  previous route, 0.758x at geomean, while six controls span
+  0.998x&ndash;1.003x.  The rounding merge is timing-neutral across 64 soft
+  operator rows at 0.997x geomean, but removes 7,600 bytes of arithmetic-bench
+  `.text`.  A dependent baseline-x86-64 probe shrinks `F16`'s
+  `from_f32`/`from_f64` bodies from 110/98 instructions to 39/43 and its
+  multiplication body from 126 to 95.
 - `E8M23`'s `from_f32`/`to_f32` conversions and arithmetic now use `f32`
   directly.  `to_f32` is a bit-cast; `from_f32` preserves a NaN's sign while
   canonicalizing its payload; `+`, `-`, `*` and `/` wrap the `f32` result and
@@ -100,6 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `MIN_10_EXP` now computes the mathematical ceiling explicitly for every
+  constructible exponent bias instead of relying on integer-cast truncation.
 - Exact `to_f32` and `to_f64` conversions now construct host fields directly
   for a stored subnormal, and generic `from_f32` decodes a subnormal input's
   fraction field instead of widening it.  Host arithmetic could let FTZ or DAZ

@@ -713,10 +713,18 @@ macro_rules! __minifloat {
                 && Self::MIN_EXP == f32::MIN_EXP
                 && Self::MAX_EXP == f32::MAX_EXP;
 
+            /// Whether this shape uses [`f32`]'s nested-exponent encoding route
+            const NESTS_IN_F32_EXPONENT: bool = Self::HAS_EXACT_F32_CONVERSION
+                && Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed() >= f32::MIN_EXP;
+
             /// Whether this shape has [`f64`]'s exponent and special-value fields
             const SHARES_F64_EXPONENT: bool = Self::HAS_INF
                 && Self::MIN_EXP == f64::MIN_EXP
                 && Self::MAX_EXP == f64::MAX_EXP;
+
+            /// Whether this shape uses [`f64`]'s nested-exponent encoding route
+            const NESTS_IN_F64_EXPONENT: bool = Self::HAS_EXACT_F64_CONVERSION
+                && Self::MIN_EXP - Self::MANTISSA_DIGITS.cast_signed() >= f64::MIN_EXP;
 
             /// Bit pattern of the canonical NaN
             ///
@@ -919,8 +927,8 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
-            // The shared-field route shifts the sign into the generated type's
-            // bitwidth; every other instantiation folds it away.
+            // The integer-field routes shift the sign into the generated
+            // type's bitwidth; every other instantiation folds it away.
             #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub fn from_f32(x: f32) -> Self {
@@ -938,6 +946,42 @@ macro_rules! __minifloat {
                     }
                     let bias = (1 << (shift - 1)) - 1 + ((bits >> shift) & 1);
                     return Self::from_bits(((bits + bias) >> shift) as $bits);
+                }
+                if Self::NESTS_IN_F32_EXPONENT {
+                    const HOST_M: u32 = f32::MANTISSA_DIGITS - 1;
+                    let bits = x.to_bits();
+                    let magnitude = bits & (u32::MAX >> 1);
+                    let sign_bit = ((bits >> (u32::BITS - 1)) as $bits)
+                        << (Self::E + Self::M);
+
+                    // Rounding a NaN can erase its retained payload and spell infinity.
+                    if magnitude > f32::INFINITY.to_bits() {
+                        let magnitude = if Self::HAS_NAN { Self::NAN_BITS } else { Self::MAX.0 };
+                        return Self::from_bits(magnitude | sign_bit);
+                    }
+                    let field = (magnitude >> HOST_M).cast_signed();
+                    if field == 0 {
+                        // Every host subnormal is below half of `TINY` under the gate.
+                        return Self::from_bits(<$bits>::from(Self::HAS_NEG_ZERO) * sign_bit);
+                    }
+                    let rebased = field + (f32::MIN_EXP - Self::MIN_EXP);
+                    let shift = (f32::MANTISSA_DIGITS
+                        .saturating_sub(Self::MANTISSA_DIGITS)
+                        .cast_signed()
+                        + (1 - rebased).max(0))
+                    .min(31)
+                    .cast_unsigned();
+                    let unrounded = (rebased.max(1).cast_unsigned() << HOST_M)
+                        | (magnitude & ((1 << HOST_M) - 1));
+                    let rounded = if shift == 0 {
+                        unrounded
+                    } else {
+                        let bias = (1 << (shift - 1)) - 1 + ((unrounded >> shift) & 1);
+                        (unrounded + bias) >> shift
+                    };
+                    let code = rounded.min(u32::from(Self::HUGE.0)) as $bits;
+                    let signed = <$bits>::from(Self::HAS_NEG_ZERO || code != 0);
+                    return Self::from_bits(code | signed * sign_bit);
                 }
                 // A hardware widening can inherit DAZ and erase a subnormal;
                 // its fraction field is already the exact significand.
@@ -961,8 +1005,8 @@ macro_rules! __minifloat {
             /// ±[`HUGE`][Self::HUGE].  Other values are rounded to the nearest
             /// representable value.
             #[must_use]
-            // The shared-field route shifts the sign into the generated type's
-            // bitwidth; every other instantiation folds it away.
+            // The integer-field routes shift the sign into the generated
+            // type's bitwidth; every other instantiation folds it away.
             #[allow(clippy::cast_possible_truncation)]
             #[inline]
             pub fn from_f64(x: f64) -> Self {
@@ -977,6 +1021,42 @@ macro_rules! __minifloat {
                     }
                     let bias = (1 << (shift - 1)) - 1 + ((bits >> shift) & 1);
                     return Self::from_bits(((bits + bias) >> shift) as $bits);
+                }
+                if Self::NESTS_IN_F64_EXPONENT {
+                    const HOST_M: u32 = f64::MANTISSA_DIGITS - 1;
+                    let bits = x.to_bits();
+                    let magnitude = bits & (u64::MAX >> 1);
+                    let sign_bit = ((bits >> (u64::BITS - 1)) as $bits)
+                        << (Self::E + Self::M);
+
+                    // Rounding a NaN can erase its retained payload and spell infinity.
+                    if magnitude > f64::INFINITY.to_bits() {
+                        let magnitude = if Self::HAS_NAN { Self::NAN_BITS } else { Self::MAX.0 };
+                        return Self::from_bits(magnitude | sign_bit);
+                    }
+                    let field = (magnitude >> HOST_M) as i32;
+                    if field == 0 {
+                        // Every host subnormal is below half of `TINY` under the gate.
+                        return Self::from_bits(<$bits>::from(Self::HAS_NEG_ZERO) * sign_bit);
+                    }
+                    let rebased = field + (f64::MIN_EXP - Self::MIN_EXP);
+                    let shift = (f64::MANTISSA_DIGITS
+                        .saturating_sub(Self::MANTISSA_DIGITS)
+                        .cast_signed()
+                        + (1 - rebased).max(0))
+                    .min(63)
+                    .cast_unsigned();
+                    let unrounded = (u64::from(rebased.max(1).cast_unsigned()) << HOST_M)
+                        | (magnitude & ((1 << HOST_M) - 1));
+                    let rounded = if shift == 0 {
+                        unrounded
+                    } else {
+                        let bias = (1 << (shift - 1)) - 1 + ((unrounded >> shift) & 1);
+                        (unrounded + bias) >> shift
+                    };
+                    let code = rounded.min(u64::from(Self::HUGE.0)) as $bits;
+                    let signed = <$bits>::from(Self::HAS_NEG_ZERO || code != 0);
+                    return Self::from_bits(code | signed * sign_bit);
                 }
                 let sign_bit = <$bits>::from(x.is_sign_negative()) << (Self::E + Self::M);
 
@@ -1006,31 +1086,18 @@ macro_rules! __minifloat {
 
                 // The exponent of the value, which is in [2^e, 2^(e+1)).
                 let e = exponent + (u64::BITS - 1 - significand.leading_zeros()).cast_signed();
-
-                let magnitude = if e < Self::MIN_EXP - 1 {
-                    // Subnormal numbers all share the ULP of the smallest one,
-                    // so their code *is* the rounded multiple of that ULP.
-                    $crate::detail::round_to_scale(
-                        significand,
-                        exponent,
-                        Self::MIN_EXP - 1 - Self::M.cast_signed(),
-                        false,
-                    )
-                } else {
-                    // Rounding to `MANTISSA_DIGITS` may carry into the implicit
-                    // bit.  That lands on the next exponent field with a zero
-                    // mantissa, which is exactly where the extra ULP belongs.
-                    // With no mantissa bit, the exponent field supplies the
-                    // destination code's parity instead.
-                    let parity_offset = Self::M == 0 && (e + Self::B) % 2 == 0;
-                    let rounded = $crate::detail::round_to_scale(
-                        significand,
-                        exponent,
-                        e - Self::M.cast_signed(),
-                        parity_offset,
-                    );
-                    (i64::from(e + Self::B) << Self::M) + rounded - (1 << Self::M)
-                };
+                let floor = Self::MIN_EXP - 1;
+                let clamped_e = if e > floor { e } else { floor };
+                // Subnormal codes and normal exponent rows meet at the same
+                // rounding scale.  With no mantissa bit, a normal exponent
+                // field still supplies the destination code's parity.
+                let parity_offset = Self::M == 0 && e >= floor && (e + Self::B) % 2 == 0;
+                let magnitude = $crate::detail::round_to_scale(
+                    significand,
+                    exponent,
+                    clamped_e - Self::M.cast_signed(),
+                    parity_offset,
+                ) + (i64::from(clamped_e - floor) << Self::M);
 
                 // Clamped to `HUGE` just above, so it fits and is non-negative;
                 // `TryFrom` is not const-friendly here either.
