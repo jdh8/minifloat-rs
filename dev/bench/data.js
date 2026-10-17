@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787601536237,
+  "lastUpdate": 1792261050601,
   "repoUrl": "https://github.com/jdh8/minifloat-rs",
   "entries": {
     "Benchmark": [
@@ -8147,6 +8147,1002 @@ window.BENCHMARK_DATA = {
             "name": "BF20/to_f32/generic",
             "value": 1689,
             "range": "± 20",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "fd34a67f03db202e5959c3f97e2341bcf28dee7d",
+          "message": "Release 0.3.1\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-18T02:08:16+08:00",
+          "tree_id": "78995b7347a2d2d3366ae509dc158480c6d05528",
+          "url": "https://github.com/jdh8/minifloat-rs/commit/fd34a67f03db202e5959c3f97e2341bcf28dee7d"
+        },
+        "date": 1792261050248,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "F4E2M1FN/add/soft",
+            "value": 5384,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/add/f32",
+            "value": 4208,
+            "range": "± 46",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/sub/soft",
+            "value": 6085,
+            "range": "± 419",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/sub/f32",
+            "value": 4578,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/mul/soft",
+            "value": 3796,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/mul/f32",
+            "value": 3946,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/div/soft",
+            "value": 5078,
+            "range": "± 37",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F4E2M1FN/div/f32",
+            "value": 4328,
+            "range": "± 50",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/add/soft",
+            "value": 5399,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/add/f32",
+            "value": 4621,
+            "range": "± 51",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/sub/soft",
+            "value": 5830,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/sub/f32",
+            "value": 4637,
+            "range": "± 20",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/mul/soft",
+            "value": 4289,
+            "range": "± 22",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/mul/f32",
+            "value": 4576,
+            "range": "± 20",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/div/soft",
+            "value": 5843,
+            "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E2M3FN/div/f32",
+            "value": 4838,
+            "range": "± 26",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/add/soft",
+            "value": 6107,
+            "range": "± 39",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/add/f32",
+            "value": 4630,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/sub/soft",
+            "value": 6168,
+            "range": "± 79",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/sub/f32",
+            "value": 4635,
+            "range": "± 26",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/mul/soft",
+            "value": 4355,
+            "range": "± 20",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/mul/f32",
+            "value": 4550,
+            "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/div/soft",
+            "value": 5453,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F6E3M2FN/div/f32",
+            "value": 4731,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/add/soft",
+            "value": 4965,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/add/f32",
+            "value": 5391,
+            "range": "± 37",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/sub/soft",
+            "value": 5016,
+            "range": "± 90",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/sub/f32",
+            "value": 5186,
+            "range": "± 26",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/mul/soft",
+            "value": 3915,
+            "range": "± 19",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/mul/f32",
+            "value": 5294,
+            "range": "± 44",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/div/soft",
+            "value": 4993,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E3M4/div/f32",
+            "value": 5146,
+            "range": "± 49",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/add/soft",
+            "value": 6049,
+            "range": "± 52",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/add/f32",
+            "value": 5848,
+            "range": "± 44",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/sub/soft",
+            "value": 6050,
+            "range": "± 37",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/sub/f32",
+            "value": 5956,
+            "range": "± 41",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/mul/soft",
+            "value": 4341,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/mul/f32",
+            "value": 5504,
+            "range": "± 35",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/div/soft",
+            "value": 5424,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/div/f32",
+            "value": 5706,
+            "range": "± 74",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/add/soft",
+            "value": 6168,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/add/f32",
+            "value": 5857,
+            "range": "± 70",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/sub/soft",
+            "value": 6118,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/sub/f32",
+            "value": 5832,
+            "range": "± 33",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/mul/soft",
+            "value": 4645,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/mul/f32",
+            "value": 5615,
+            "range": "± 120",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/div/soft",
+            "value": 6215,
+            "range": "± 41",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FN/div/f32",
+            "value": 6268,
+            "range": "± 91",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/add/soft",
+            "value": 6391,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/add/f32",
+            "value": 5658,
+            "range": "± 35",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/sub/soft",
+            "value": 6515,
+            "range": "± 24",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/sub/f32",
+            "value": 5728,
+            "range": "± 107",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/mul/soft",
+            "value": 5244,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/mul/f32",
+            "value": 5223,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/div/soft",
+            "value": 6591,
+            "range": "± 35",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3FNUZ/div/f32",
+            "value": 5694,
+            "range": "± 42",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/add/soft",
+            "value": 6597,
+            "range": "± 44",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/add/f32",
+            "value": 5694,
+            "range": "± 149",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/sub/soft",
+            "value": 6446,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/sub/f32",
+            "value": 5629,
+            "range": "± 84",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/mul/soft",
+            "value": 5203,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/mul/f32",
+            "value": 5159,
+            "range": "± 343",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/div/soft",
+            "value": 6655,
+            "range": "± 33",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3B11FNUZ/div/f32",
+            "value": 5620,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/add/soft",
+            "value": 8232,
+            "range": "± 34",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/add/f32",
+            "value": 5895,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/sub/soft",
+            "value": 8195,
+            "range": "± 64",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/sub/f32",
+            "value": 5900,
+            "range": "± 48",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/mul/soft",
+            "value": 5777,
+            "range": "± 90",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/mul/f32",
+            "value": 6335,
+            "range": "± 35",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/div/soft",
+            "value": 5680,
+            "range": "± 20",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2/div/f32",
+            "value": 6575,
+            "range": "± 53",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/add/soft",
+            "value": 6711,
+            "range": "± 36",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/add/f32",
+            "value": 5509,
+            "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/sub/soft",
+            "value": 6589,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/sub/f32",
+            "value": 5474,
+            "range": "± 317",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/mul/soft",
+            "value": 5609,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/mul/f32",
+            "value": 5644,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/div/soft",
+            "value": 6716,
+            "range": "± 27",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/div/f32",
+            "value": 7086,
+            "range": "± 43",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/add/soft",
+            "value": 6334,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/add/f32",
+            "value": 5724,
+            "range": "± 43",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/sub/soft",
+            "value": 6276,
+            "range": "± 26",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/sub/f32",
+            "value": 5748,
+            "range": "± 125",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/mul/soft",
+            "value": 4860,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/mul/f32",
+            "value": 6157,
+            "range": "± 42",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/div/soft",
+            "value": 6203,
+            "range": "± 27",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/div/f32",
+            "value": 6412,
+            "range": "± 159",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/add/soft",
+            "value": 8683,
+            "range": "± 45",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/add/f32",
+            "value": 1332,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/sub/soft",
+            "value": 8803,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/sub/f32",
+            "value": 1332,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/mul/soft",
+            "value": 5154,
+            "range": "± 63",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/mul/f32",
+            "value": 1966,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/div/soft",
+            "value": 6653,
+            "range": "± 49",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/div/f32",
+            "value": 2627,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/add/soft",
+            "value": 8574,
+            "range": "± 34",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/add/f64",
+            "value": 5443,
+            "range": "± 20",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/sub/soft",
+            "value": 8772,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/sub/f64",
+            "value": 5456,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/mul/soft",
+            "value": 4890,
+            "range": "± 54",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/mul/f64",
+            "value": 7433,
+            "range": "± 234",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/div/soft",
+            "value": 6247,
+            "range": "± 24",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/div/f64",
+            "value": 9032,
+            "range": "± 134",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/add/soft",
+            "value": 7894,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/add/f64",
+            "value": 1162,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/sub/soft",
+            "value": 8191,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/sub/f64",
+            "value": 1223,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/mul/soft",
+            "value": 5138,
+            "range": "± 26",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/mul/f64",
+            "value": 1997,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/div/soft",
+            "value": 6494,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E11M4/div/f64",
+            "value": 3104,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/add/soft",
+            "value": 3733,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/add/f64",
+            "value": 5134,
+            "range": "± 42",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/sub/soft",
+            "value": 3843,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/sub/f64",
+            "value": 4972,
+            "range": "± 42",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/mul/soft",
+            "value": 3126,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/mul/f64",
+            "value": 4857,
+            "range": "± 39",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/div/soft",
+            "value": 4173,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E2M13/div/f64",
+            "value": 4742,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/add/soft",
+            "value": 759,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/add/f64",
+            "value": 5240,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/sub/soft",
+            "value": 717,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/sub/f64",
+            "value": 5266,
+            "range": "± 29",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/mul/soft",
+            "value": 1241,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/mul/f64",
+            "value": 7768,
+            "range": "± 44",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/div/soft",
+            "value": 2410,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "E8M23/div/f64",
+            "value": 8571,
+            "range": "± 118",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/from_f32/direct",
+            "value": 927,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/from_f32/generic",
+            "value": 2976,
+            "range": "± 46",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/from_f32/direct",
+            "value": 838,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/from_f32/generic",
+            "value": 3028,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/from_f32/direct",
+            "value": 2674,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/from_f32/generic",
+            "value": 2815,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/from_f32/direct",
+            "value": 2672,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/from_f32/generic",
+            "value": 2812,
+            "range": "± 67",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/from_f32/direct",
+            "value": 3151,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/from_f32/generic",
+            "value": 3071,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/predicate/is_nan",
+            "value": 574,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/predicate/classify",
+            "value": 1120,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/predicate/partial_cmp",
+            "value": 1917,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E4M3/predicate/total_cmp",
+            "value": 1218,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/predicate/is_nan",
+            "value": 641,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/predicate/classify",
+            "value": 755,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/predicate/partial_cmp",
+            "value": 1329,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F8E5M2FNUZ/predicate/total_cmp",
+            "value": 1218,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/predicate/is_nan",
+            "value": 642,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/predicate/classify",
+            "value": 982,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/predicate/partial_cmp",
+            "value": 1978,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "F16/predicate/total_cmp",
+            "value": 1368,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/predicate/is_nan",
+            "value": 574,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/predicate/classify",
+            "value": 960,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/predicate/partial_cmp",
+            "value": 2067,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/predicate/total_cmp",
+            "value": 1369,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/predicate/is_nan",
+            "value": 643,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/predicate/classify",
+            "value": 799,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/predicate/partial_cmp",
+            "value": 2024,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/predicate/total_cmp",
+            "value": 1262,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/to_f32/direct",
+            "value": 364,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF16/to_f32/generic",
+            "value": 1490,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/to_f32/direct",
+            "value": 329,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "BF20/to_f32/generic",
+            "value": 1689,
+            "range": "± 21",
             "unit": "ns/iter"
           }
         ]
